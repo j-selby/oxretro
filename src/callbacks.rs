@@ -1,6 +1,7 @@
 /// Handlers for the callbacks from the LibRetro core.
 
 use retro_types::RetroPixelFormat;
+use retro_types::RetroEnvironment;
 
 use state::get_current_frontend;
 
@@ -10,12 +11,20 @@ use std::os::raw::*;
 use std::mem::transmute;
 use std::slice::from_raw_parts;
 
-const RETRO_ENVIRONMENT_SET_PIXEL_FORMAT : u32 = 10;
-
 pub unsafe extern "C" fn environment_callback(cmd : c_uint, data : *const c_void) -> bool {
-    let safe_command = cmd & 0xFFFF;
+    let safe_command = RetroEnvironment::from_command_id(cmd & 0xFFFF);
+
+    let safe_command = match safe_command {
+        Some(v) => v,
+        None => {
+            // Unsupported command
+            println!("Unknown environmental command: {}", cmd);
+            return false
+        }
+    };
+
     match safe_command {
-        RETRO_ENVIRONMENT_SET_PIXEL_FORMAT => {
+        RetroEnvironment::SetPixelFormat => {
             let raw_pixel_format = *(data as *const u32);
 
             let actual_pixel_format = RetroPixelFormat::from(raw_pixel_format);
@@ -30,7 +39,7 @@ pub unsafe extern "C" fn environment_callback(cmd : c_uint, data : *const c_void
             }
         }
         _ => {
-            println!("Unknown command: {}", safe_command);
+            println!("Unsupported environmental command: {:?}", safe_command);
             false
         }
     }

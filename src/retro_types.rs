@@ -316,3 +316,97 @@ impl RetroPixelFormat {
         )
     }
 }
+
+/// Different environment commands.
+#[derive(Debug)]
+pub enum RetroEnvironment {
+    SetRotation,
+    GetOverscan,
+    GetCanDup,
+    SetMessage,
+    Shutdown,
+    SetPerformanceLevel,
+    GetSystemDirectory,
+    SetPixelFormat,
+    SetInputDescriptors,
+    SetKeyboardCallback,
+    SetDiskControlInterface,
+    SetHWRender,
+    GetVariable,
+    SetVariables,
+    GetVariableUpdate,
+    SetSupportNoGame,
+    GetLibretroPath,
+    SetAudioCallback,
+    SetFrameTimeCallback,
+    GetRumbleInterface,
+    GetInputDeviceCapabilities,
+    GetSensorInterface,
+    GetCameraInterface,
+    GetLogInterface,
+    GetPerfInterface,
+    GetLocationInterface,
+    GetCoreAssetsDirectory,
+    GetSaveDirectory,
+    SetSystemAVInfo,
+    SetProcAddress,
+    SetSubsystemInfo,
+    SetControllerInfo,
+    SetMemoryMaps,
+    SetGeometry,
+    GetUsername,
+    GetLanguage,
+    GetCurrentSoftwareFramebuffer,
+    SetHWSharedContext,
+    GetVFSInterface
+}
+
+impl RetroEnvironment {
+    /// Returns a RetroEnvironment depending on a ID provided by the LibRetro API.
+    pub fn from_command_id(id : u32) -> Option<Self> {
+        Some(
+            match id {
+                1 => RetroEnvironment::SetRotation,
+                2 => RetroEnvironment::GetOverscan,
+                3 => RetroEnvironment::GetCanDup,
+                6 => RetroEnvironment::SetMessage,
+                7 => RetroEnvironment::Shutdown,
+                8 => RetroEnvironment::SetPerformanceLevel,
+                9 => RetroEnvironment::GetSystemDirectory,
+                10 => RetroEnvironment::SetPixelFormat,
+                11 => RetroEnvironment::SetInputDescriptors,
+                12 => RetroEnvironment::SetKeyboardCallback,
+                13 => RetroEnvironment::SetDiskControlInterface,
+                14 => RetroEnvironment::SetHWRender,
+                15 => RetroEnvironment::GetVariable,
+                16 => RetroEnvironment::SetVariables,
+                17 => RetroEnvironment::GetVariableUpdate,
+                18 => RetroEnvironment::SetSupportNoGame,
+                19 => RetroEnvironment::GetLibretroPath,
+                21 => RetroEnvironment::SetFrameTimeCallback,
+                22 => RetroEnvironment::SetAudioCallback,
+                23 => RetroEnvironment::GetRumbleInterface,
+                24 => RetroEnvironment::GetInputDeviceCapabilities,
+                25 => RetroEnvironment::GetSensorInterface,
+                26 => RetroEnvironment::GetCameraInterface,
+                27 => RetroEnvironment::GetLogInterface,
+                28 => RetroEnvironment::GetPerfInterface,
+                29 => RetroEnvironment::GetLocationInterface,
+                30 => RetroEnvironment::GetCoreAssetsDirectory,
+                31 => RetroEnvironment::GetSaveDirectory,
+                32 => RetroEnvironment::SetSystemAVInfo,
+                33 => RetroEnvironment::SetProcAddress,
+                34 => RetroEnvironment::SetSubsystemInfo,
+                35 => RetroEnvironment::SetControllerInfo,
+                36 => RetroEnvironment::SetMemoryMaps,
+                37 => RetroEnvironment::SetGeometry,
+                38 => RetroEnvironment::GetUsername,
+                39 => RetroEnvironment::GetLanguage,
+                40 => RetroEnvironment::GetCurrentSoftwareFramebuffer,
+                44 => RetroEnvironment::SetHWSharedContext,
+                45 => RetroEnvironment::GetVFSInterface,
+                _ => return None
+            }
+        )
+    }
+}
