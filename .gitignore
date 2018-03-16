@@ -1,0 +1,9 @@
+/.idea
+*.iml
+/target/
+**/*.rs.bk
+
+*.dll
+*.gb
+*.gba
+*.nds

@@ -1,0 +1,16 @@
+[package]
+name = "oxretro"
+version = "0.1.0"
+authors = ["James <jselby@jselby.net>"]
+
+[dependencies]
+libloading = "0.5.0"
+glutin = {version = "*", optional = true}
+gl = {version = "*", optional = true}
+rodio = {version = "0.6.0", optional = true, default-features = false}
+glfw = {version = "0.21.0", optional = true}
+
+[features]
+graphics_opengl = ["gl", "glutin"]
+audio_rodio = ["rodio"]
+default = ["graphics_opengl", "audio_rodio", "glfw"]
