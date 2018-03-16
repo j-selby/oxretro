@@ -7,6 +7,8 @@ use std::str::Utf8Error;
 
 use std::os::raw::*;
 
+use ffi::char_pointer_to_owned;
+
 // Core functions
 // retro_init()
 pub type RetroInitFn = unsafe extern fn() -> ();
@@ -49,15 +51,6 @@ pub type RetroLoadGameFn = unsafe extern fn(*const RawRetroGameInfo) -> bool;
 
 // void retro_get_system_av_info(struct retro_system_av_info*)
 pub type RetroGetSystemAvInfoFn = unsafe extern fn(*const RetroAvInfo) -> ();
-
-/// Converts a C char array to a owned Rust String. Helper to other functions in here.
-fn char_pointer_to_owned(string : *const c_char) -> Result<String, Utf8Error> {
-    Ok(
-        unsafe {
-            CStr::from_ptr(string)
-        }.to_str()?.to_owned()
-    )
-}
 
 /// Raw, C-compatible version of RetroSystemInfo for FFI.
 #[repr(C)]
@@ -409,4 +402,53 @@ impl RetroEnvironment {
             }
         )
     }
+}
+
+/// Raw collection of variable settings
+#[repr(C)]
+pub struct RawRetroVariable {
+    pub key : *const c_char,
+    pub value : *const c_char
+}
+
+impl RawRetroVariable {
+    pub fn is_eof(&self) -> bool {
+        self.key as usize == 0 || self.value as usize == 0
+    }
+
+    pub fn get_key(&self) -> Result<String, Utf8Error> {
+        char_pointer_to_owned(self.key)
+    }
+
+    pub fn to_owned(&self) -> Result<RetroVariable, Utf8Error> {
+        let values = char_pointer_to_owned(self.value)?;
+
+        let (description, options) = values.split_at(values.find(";").unwrap());
+
+        // args is going to have a ; and a space, potentially. strip it
+        let options = options[1..].trim_left();
+        let options = options.split("|").map(|v| v.to_owned()).collect::<Vec<String>>();
+
+        let selected = options[0].to_owned();
+
+        let description = description.to_owned();
+
+        Ok(
+            RetroVariable {
+                key : char_pointer_to_owned(self.key)?,
+                description,
+                options,
+                selected
+            }
+        )
+    }
+}
+
+/// Parsed collection of variable settings
+#[derive(Debug)]
+pub struct RetroVariable {
+    pub key : String,
+    pub description : String,
+    pub options : Vec<String>,
+    pub selected : String
 }

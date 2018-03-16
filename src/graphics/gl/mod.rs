@@ -159,15 +159,13 @@ pub fn build() -> Box<Renderer> {
         gl_window.make_current().unwrap();
     }
 
-    unsafe {
-        self::gl::load_with(|symbol| gl_window.get_proc_address(symbol) as *const _);
-    }
+    self::gl::load_with(|symbol| gl_window.get_proc_address(symbol) as *const _);
 
     let mut tex = unsafe { mem::uninitialized() };
     let mut ebo = unsafe { mem::uninitialized() };
     let mut vao;
     let mut vb;
-    let mut program;
+    let program;
 
     unsafe {
         // Generate shaders

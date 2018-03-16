@@ -10,6 +10,7 @@ mod state;
 mod retro_types;
 mod core;
 mod callbacks;
+mod ffi;
 
 use core::LibRetroCore;
 
@@ -68,6 +69,8 @@ fn main() {
         let start_loop = time::Instant::now();
 
         core.run().unwrap();
+
+        frontend.variables_dirty = false;
 
         let elapsed = start_loop.elapsed();
         if elapsed < max_frame {

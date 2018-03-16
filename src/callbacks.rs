@@ -2,6 +2,9 @@
 
 use retro_types::RetroPixelFormat;
 use retro_types::RetroEnvironment;
+use retro_types::RawRetroVariable;
+
+use ffi::char_pointer_to_owned;
 
 use state::get_current_frontend;
 
@@ -12,7 +15,11 @@ use std::mem::transmute;
 use std::slice::from_raw_parts;
 
 pub unsafe extern "C" fn environment_callback(cmd : c_uint, data : *const c_void) -> bool {
-    let safe_command = RetroEnvironment::from_command_id(cmd & 0xFFFF);
+    // Mask out flags - they are for API defintions mainly, and we either
+    // support the specfic feature or not.
+    let cmd = cmd & 0xFFFF;
+
+    let safe_command = RetroEnvironment::from_command_id(cmd);
 
     let safe_command = match safe_command {
         Some(v) => v,
@@ -37,6 +44,62 @@ pub unsafe extern "C" fn environment_callback(cmd : c_uint, data : *const c_void
                 },
                 _ => false
             }
+        },
+        RetroEnvironment::SetVariables => {
+            // Fetch all components of the structure till nullptr
+            let mut strings = Vec::new();
+
+            println!("Attempting variables:");
+            let mut add = 0;
+            loop {
+                let inner_ptr = (data as *const RawRetroVariable).offset(add);
+
+                let variable = &*inner_ptr;
+                if variable.is_eof() {
+                    break;
+                }
+
+                let variable = variable.to_owned().unwrap();
+
+                println!("{:?}", variable);
+
+                strings.push(variable);
+
+                add += 1;
+            }
+
+            let frontend = get_current_frontend();
+            frontend.variables = strings;
+            // TODO: Set values for this from configuration file
+            frontend.variables_dirty = true;
+
+            //println!("{:?}", strings);
+            true
+        },
+        RetroEnvironment::GetVariable => {
+            let variable = &mut *(data as *mut RawRetroVariable);
+            let key = variable.get_key().unwrap();
+
+            let frontend = get_current_frontend();
+            let mut found = false;
+
+            for search_variable in &frontend.variables {
+                if key == search_variable.key {
+                    // This is UNSAFE, but frontend does exist until core_deinit, and
+                    // the core shouldn't be able to refer to it beyond there.
+                    variable.value = search_variable.selected.as_ptr() as *const _;
+                    found = true;
+                    break;
+                }
+            }
+
+            found
+        },
+        RetroEnvironment::GetVariableUpdate => {
+            let frontend = get_current_frontend();
+            *(data as *mut bool) = frontend.variables_dirty;
+
+            true
         }
         _ => {
             println!("Unsupported environmental command: {:?}", safe_command);

@@ -4,7 +4,7 @@ use std::mem::transmute;
 
 use graphics::Renderer;
 use audio::AudioBackend;
-use retro_types::{RetroSystemInfo, RetroPixelFormat};
+use retro_types::{RetroSystemInfo, RetroPixelFormat, RetroVariable};
 
 // Static callbacks
 pub struct FrontendState {
@@ -12,6 +12,10 @@ pub struct FrontendState {
     pub audio : Option<Box<AudioBackend>>,
     pub info : RetroSystemInfo,
     pub format : RetroPixelFormat,
+
+    pub variables : Vec<RetroVariable>,
+    pub variables_dirty : bool,
+
     is_global : bool
 }
 
@@ -63,6 +67,9 @@ impl FrontendState {
             audio,
             info,
             format,
+            variables : Vec::new(),
+            variables_dirty : true,
+
             is_global: false
         }
     }
