@@ -100,7 +100,17 @@ pub unsafe extern "C" fn environment_callback(cmd : c_uint, data : *const c_void
             *(data as *mut bool) = frontend.variables_dirty;
 
             true
-        }
+        },
+        RetroEnvironment::GetSaveDirectory => {
+            let frontend = get_current_frontend();
+            *(data as *mut *const c_char) = frontend.save_path.as_ptr() as *const _;
+            true
+        },
+        RetroEnvironment::GetSystemDirectory => {
+            let frontend = get_current_frontend();
+            *(data as *mut *const c_char) = frontend.system_path.as_ptr() as *const _;
+            true
+        },
         _ => {
             println!("Unsupported environmental command: {:?}", safe_command);
             false

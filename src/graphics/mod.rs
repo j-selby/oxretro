@@ -24,6 +24,8 @@ pub trait Renderer {
 
     // TODO: This shouldn't be here
     fn is_key_down(&self, key : &InputKey) -> bool;
+
+    fn set_title(&mut self, title : String);
 }
 
 static AVAILABLE_RENDERERS: &'static [(&'static RendererInfo, fn() -> Box<Renderer>)] = &[

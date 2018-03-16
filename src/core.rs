@@ -77,31 +77,40 @@ impl LibRetroCore {
         Ok(())
     }
 
-    pub fn load_game(&self, path : &Path) -> Result<bool, CoreError> {
+    pub fn load_game(&self, path : Option<&Path>) -> Result<bool, CoreError> {
         let info = self.get_system_info()?;
 
-        let meta = if info.need_fullpath {
-            RetroGameInfo::new(path.to_str(), None,
-                               translate_lib_result(path.metadata())?.len() as _, Some(""))
-        } else {
-            let length : usize;
-            let data = {
-                let mut file = translate_lib_result(File::open(path))?;
-                let mut buf = Vec::new();
-                length = translate_lib_result(file.read_to_end(&mut buf))?;
-                buf
-            };
+        let meta = match path {
+            Some(v) => {
+                Some(
+                    if info.need_fullpath {
+                        RetroGameInfo::new(v.to_str(), None,
+                                           translate_lib_result(v.metadata())?.len() as _, Some(""))
+                    } else {
+                        let length : usize;
+                        let data = {
+                            let mut file = translate_lib_result(File::open(v))?;
+                            let mut buf = Vec::new();
+                            length = translate_lib_result(file.read_to_end(&mut buf))?;
+                            buf
+                        };
 
-            RetroGameInfo::new(path.to_str(), Some(data),length, Some(""))
+                        RetroGameInfo::new(v.to_str(), Some(data),length, Some(""))
+                    }
+                )
+            }
+            _ => None
         };
-
-        let raw_meta = meta.as_raw();
 
         unsafe {
             let func: lib::Symbol<RetroLoadGameFn> =
                 translate_lib_result(self.library.get(b"retro_load_game"))?;
 
-            Ok(func(&raw_meta))
+            match meta {
+                Some(v) => Ok(func((&v.as_raw()) as *const RawRetroGameInfo)),
+                None => Ok(func(0 as *const RawRetroGameInfo))
+            }
+
         }
     }
 

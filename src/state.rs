@@ -2,6 +2,11 @@
 
 use std::mem::transmute;
 
+use std::path::Path;
+use std::path::PathBuf;
+use std::fs::create_dir;
+use std::fs::canonicalize;
+
 use graphics::Renderer;
 use audio::AudioBackend;
 use retro_types::{RetroSystemInfo, RetroPixelFormat, RetroVariable};
@@ -15,6 +20,9 @@ pub struct FrontendState {
 
     pub variables : Vec<RetroVariable>,
     pub variables_dirty : bool,
+
+    pub save_path : String,
+    pub system_path : String,
 
     is_global : bool
 }
@@ -62,6 +70,22 @@ impl FrontendState {
                audio : Option<Box<AudioBackend>>,
                info : RetroSystemInfo,
                format : RetroPixelFormat) -> FrontendState {
+        let saves_dir = Path::new("saves");
+        if !saves_dir.exists() {
+            create_dir(&saves_dir).unwrap();
+        }
+
+        let saves_dir = canonicalize(saves_dir).unwrap().to_str().unwrap().to_owned();
+
+        let systems_dir = Path::new("system");
+        if !systems_dir.exists() {
+            create_dir(&systems_dir).unwrap();
+        }
+
+        let systems_dir = canonicalize(systems_dir).unwrap().to_str().unwrap().to_owned();
+
+        println!("Save path: {}", saves_dir);
+
         FrontendState {
             renderer,
             audio,
@@ -69,6 +93,9 @@ impl FrontendState {
             format,
             variables : Vec::new(),
             variables_dirty : true,
+
+            save_path : saves_dir,
+            system_path : systems_dir,
 
             is_global: false
         }

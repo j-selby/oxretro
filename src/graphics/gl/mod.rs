@@ -143,6 +143,10 @@ impl Renderer for GLRenderer {
 
         self.keys.contains(&native_key)
     }
+
+    fn set_title(&mut self, title: String) {
+        self.gl_window.set_title(&title);
+    }
 }
 
 pub fn build() -> Box<Renderer> {

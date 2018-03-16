@@ -47,10 +47,13 @@ fn main() {
 
 
     println!("Load:");
-    println!("{:?}", core.load_game(Path::new("rom.gba")));
+    println!("{:?}", core.load_game(Some(Path::new("rom.gba"))));
 
     println!("Building context...");
-    let renderer = graphics::build(false, false).unwrap();
+    let mut renderer = graphics::build(false, false).unwrap();
+
+    renderer.set_title(format!("OxRetro - {} ({})", frontend.info.library_name,
+                               frontend.info.library_version));
 
     println!("Av:");
     let av_info = core.get_av_info().unwrap();
