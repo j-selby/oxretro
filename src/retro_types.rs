@@ -49,6 +49,9 @@ pub type RetroSetInputStateFn = unsafe extern fn(unsafe extern fn(c_uint, c_uint
 // bool retro_load_game(const struct retro_game_info*)
 pub type RetroLoadGameFn = unsafe extern fn(*const RawRetroGameInfo) -> bool;
 
+// void retro_unload_game()
+pub type RetroUnloadGameFn = unsafe extern fn() -> ();
+
 // void retro_get_system_av_info(struct retro_system_av_info*)
 pub type RetroGetSystemAvInfoFn = unsafe extern fn(*const RetroAvInfo) -> ();
 
@@ -263,9 +266,9 @@ impl RetroPixelFormat {
                     for x in 0 .. width {
                         let pos = y * width * pixel_size + x * pixel_size;
 
-                        result.push(original_data[pos]);
-                        result.push(original_data[pos + 1]);
                         result.push(original_data[pos + 2]);
+                        result.push(original_data[pos + 1]);
+                        result.push(original_data[pos]);
                         result.push(255);
                     }
                 }
@@ -434,12 +437,12 @@ impl RawRetroVariable {
         let description = description.to_owned();
 
         Ok(
-            RetroVariable {
-                key : char_pointer_to_owned(self.key)?,
+            RetroVariable::new(
+                char_pointer_to_owned(self.key)?,
                 description,
                 options,
                 selected
-            }
+            )
         )
     }
 }
@@ -450,5 +453,24 @@ pub struct RetroVariable {
     pub key : String,
     pub description : String,
     pub options : Vec<String>,
-    pub selected : String
+    selected : String,
+    selected_raw : CString
+}
+
+impl RetroVariable {
+    pub fn get_selected(&self) -> *const c_char {
+        self.selected_raw.as_ptr()
+    }
+
+    pub fn new(key : String, description : String, options : Vec<String>,
+               selected : String) -> Self {
+        let raw = CString::new(selected.clone()).unwrap();
+        RetroVariable {
+            key,
+            description,
+            options,
+            selected,
+            selected_raw : raw
+        }
+    }
 }

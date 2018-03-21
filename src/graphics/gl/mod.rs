@@ -87,8 +87,6 @@ impl Renderer for GLRenderer {
             events.push(event);
         });
 
-        self.keys.clear();
-
         for event in events {
             match event {
                 glutin::Event::WindowEvent { event, .. } => match event {
@@ -102,13 +100,18 @@ impl Renderer for GLRenderer {
                     glutin::WindowEvent::KeyboardInput { device_id, input } => {
                         match input.virtual_keycode {
                             Some(v) => {
-                                self.keys.push(v);
+                                if input.state == glutin::ElementState::Pressed
+                                    && !self.keys.contains(&v) {
+                                    self.keys.push(v);
+                                } else if input.state == glutin::ElementState::Released {
+                                    self.keys.remove_item(&v);
+                                }
                             },
                             _ => {}
                         }
                     },
                     _ => ()
-                },
+                }
                 _ => ()
             }
         }

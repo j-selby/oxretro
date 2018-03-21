@@ -114,6 +114,17 @@ impl LibRetroCore {
         }
     }
 
+    pub fn unload_game(&self) -> Result<(), CoreError> {
+        unsafe {
+            let func: lib::Symbol<RetroUnloadGameFn> =
+                translate_lib_result(self.library.get(b"retro_unload_game"))?;
+
+            func();
+        }
+
+        Ok(())
+    }
+
     pub fn deinit(&self) -> Result<(), CoreError> {
         unsafe {
             let func: lib::Symbol<RetroDeinitFn> =

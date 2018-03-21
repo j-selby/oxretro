@@ -1,4 +1,4 @@
-#![feature(box_leak)]
+#![feature(vec_remove_item)]
 
 extern crate libloading as lib;
 
@@ -24,7 +24,7 @@ use std::{thread, time};
 
 fn main() {
     println!("Loading library...");
-    let library = lib::Library::new("core.dll").unwrap();
+    let library = lib::Library::new("melonds_libretro.dll").unwrap();
 
     println!("Configuring environment...");
     let core = LibRetroCore::from_library(library);
@@ -47,7 +47,7 @@ fn main() {
 
 
     println!("Load:");
-    println!("{:?}", core.load_game(Some(Path::new("rom.gba"))));
+    println!("{:?}", core.load_game(Some(Path::new("rom2.nds"))).unwrap());
 
     println!("Building context...");
     let mut renderer = graphics::build(false, false).unwrap();
@@ -65,6 +65,7 @@ fn main() {
 
     frontend.audio = Some(audio);
 
+    println!("Palette: {:?}", frontend.format);
     println!("Loop:");
     let max_frame = time::Duration::from_millis(16);
 
@@ -82,6 +83,9 @@ fn main() {
             thread::sleep(sleep_time);
         }
     }
+
+    println!("Core unload:");
+    core.unload_game().unwrap();
 
     println!("Core deinit:");
     core.deinit().unwrap();

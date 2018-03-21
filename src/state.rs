@@ -6,6 +6,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::fs::create_dir;
 use std::fs::canonicalize;
+use std::ffi::CString;
 
 use graphics::Renderer;
 use audio::AudioBackend;
@@ -21,8 +22,9 @@ pub struct FrontendState {
     pub variables : Vec<RetroVariable>,
     pub variables_dirty : bool,
 
-    pub save_path : String,
-    pub system_path : String,
+    // Extract these to a FII structure
+    pub save_path : CString,
+    pub system_path : CString,
 
     is_global : bool
 }
@@ -94,8 +96,8 @@ impl FrontendState {
             variables : Vec::new(),
             variables_dirty : true,
 
-            save_path : saves_dir,
-            system_path : systems_dir,
+            save_path : CString::new(saves_dir).unwrap(),
+            system_path : CString::new(systems_dir).unwrap(),
 
             is_global: false
         }

@@ -87,7 +87,7 @@ pub unsafe extern "C" fn environment_callback(cmd : c_uint, data : *const c_void
                 if key == search_variable.key {
                     // This is UNSAFE, but frontend does exist until core_deinit, and
                     // the core shouldn't be able to refer to it beyond there.
-                    variable.value = search_variable.selected.as_ptr() as *const _;
+                    variable.value = search_variable.get_selected();
                     found = true;
                     break;
                 }
