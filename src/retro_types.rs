@@ -93,7 +93,7 @@ impl RawRetroSystemInfo {
 }
 
 /// Describes the metadata for a particular core.
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct RetroSystemInfo {
     pub library_name : String,
     pub library_version : String,
@@ -323,14 +323,19 @@ pub enum RetroEnvironment {
     Shutdown,
     SetPerformanceLevel,
     GetSystemDirectory,
+    // Local only
     SetPixelFormat,
     SetInputDescriptors,
     SetKeyboardCallback,
     SetDiskControlInterface,
     SetHWRender,
-    GetVariable,
-    SetVariables,
-    GetVariableUpdate,
+    GetVariable/* {
+        key : String
+    }*/,
+    SetVariables/* {
+        vars : Vec<RetroVariable>
+    }*/,
+    GetVariableUpdate,// {},
     SetSupportNoGame,
     GetLibretroPath,
     SetAudioCallback,

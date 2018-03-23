@@ -5,10 +5,16 @@ authors = ["James <jselby@jselby.net>"]
 
 [dependencies]
 libloading = "0.5.0"
+
 glutin = {version = "*", optional = true}
 gl = {version = "*", optional = true}
 rodio = {version = "0.6.0", optional = true, default-features = false}
 gilrs = {version = "0.6.0", optional = true}
+
+serde = "1.0.33"
+serde_derive = "1.0.33"
+bincode = "1.0.0"
+byteorder = "1"
 
 [features]
 graphics_opengl = ["gl", "glutin"]

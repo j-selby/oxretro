@@ -1,6 +1,14 @@
 #![feature(vec_remove_item)]
+#![feature(mpsc_select)]
 
 extern crate libloading as lib;
+
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
+extern crate bincode;
+
+extern crate byteorder;
 
 mod audio;
 mod input;
@@ -11,6 +19,7 @@ mod retro_types;
 mod core;
 mod callbacks;
 mod ffi;
+mod core_protocol;
 
 use core::LibRetroCore;
 
