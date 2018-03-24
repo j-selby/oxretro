@@ -16,6 +16,8 @@ serde_derive = "1.0.33"
 bincode = "1.0.0"
 byteorder = "1"
 
+clap = "2.31.2"
+
 [features]
 graphics_opengl = ["gl", "glutin"]
 audio_rodio = ["rodio"]

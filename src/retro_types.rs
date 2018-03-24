@@ -1,6 +1,5 @@
 /// The various types in the LibRetro API.
 
-use std::ffi::CStr;
 use std::ffi::CString;
 
 use std::str::Utf8Error;
@@ -162,6 +161,7 @@ impl RetroGameInfo {
 
 /// Describes the dimensions of a core's requested framebuffer.
 #[repr(C)]
+#[derive(Deserialize, Serialize)]
 pub struct RetroGameGeometry {
     pub base_width : u32,
     pub base_height : u32,
@@ -172,6 +172,7 @@ pub struct RetroGameGeometry {
 
 /// Describes the timings of a core.
 #[repr(C)]
+#[derive(Deserialize, Serialize)]
 pub struct RetroSystemTiming {
     pub fps : f64,
     pub sample_rate : f64
@@ -179,6 +180,7 @@ pub struct RetroSystemTiming {
 
 /// Describes the A/V requirements for a Core.
 #[repr(C)]
+#[derive(Deserialize, Serialize)]
 pub struct RetroAvInfo {
     pub geometry : RetroGameGeometry,
     pub timing : RetroSystemTiming
@@ -453,7 +455,7 @@ impl RawRetroVariable {
 }
 
 /// Parsed collection of variable settings
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct RetroVariable {
     pub key : String,
     pub description : String,
@@ -463,10 +465,6 @@ pub struct RetroVariable {
 }
 
 impl RetroVariable {
-    pub fn get_selected(&self) -> *const c_char {
-        self.selected_raw.as_ptr()
-    }
-
     pub fn new(key : String, description : String, options : Vec<String>,
                selected : String) -> Self {
         let raw = CString::new(selected.clone()).unwrap();

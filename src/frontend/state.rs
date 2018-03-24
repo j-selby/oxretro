@@ -1,32 +1,26 @@
 /// Maintains the current, global state.
 
-use std::mem::transmute;
-
 use std::path::Path;
-use std::path::PathBuf;
 use std::fs::create_dir;
 use std::fs::canonicalize;
 use std::ffi::CString;
 
 use graphics::Renderer;
 use audio::AudioBackend;
-use retro_types::{RetroSystemInfo, RetroPixelFormat, RetroVariable};
+use retro_types::{RetroSystemInfo, RetroVariable};
 
 // Static callbacks
 pub struct FrontendState {
     pub renderer : Option<Box<Renderer>>,
     pub audio : Option<Box<AudioBackend>>,
-    pub info : RetroSystemInfo,
-    pub format : RetroPixelFormat,
+    pub info : Option<RetroSystemInfo>,
 
     pub variables : Vec<RetroVariable>,
     pub variables_dirty : bool,
 
     // Extract these to a FII structure
     pub save_path : CString,
-    pub system_path : CString,
-
-    is_global : bool
+    pub system_path : CString
 }
 
 impl FrontendState {
@@ -48,30 +42,10 @@ impl FrontendState {
         }
     }
 
-    /// Makes this core the current, global instance.
-    pub unsafe fn make_current(&mut self) {
-        if FRONTEND.is_some() {
-            panic!("Multiple frontends active at once!");
-        }
-
-        FRONTEND = Some(self as *mut FrontendState);
-
-        self.is_global = true;
-    }
-
-    /// Removes this core from the global state, if it has already been set as global.
-    pub unsafe fn done_current(&mut self) {
-        if self.is_global {
-            FRONTEND.take();
-            self.is_global = false;
-        }
-    }
-
     /// Builds a new frontend state.
     pub fn new(renderer : Option<Box<Renderer>>,
                audio : Option<Box<AudioBackend>>,
-               info : RetroSystemInfo,
-               format : RetroPixelFormat) -> FrontendState {
+               info : Option<RetroSystemInfo>) -> FrontendState {
         let saves_dir = Path::new("saves");
         if !saves_dir.exists() {
             create_dir(&saves_dir).unwrap();
@@ -92,32 +66,11 @@ impl FrontendState {
             renderer,
             audio,
             info,
-            format,
             variables : Vec::new(),
             variables_dirty : true,
 
             save_path : CString::new(saves_dir).unwrap(),
-            system_path : CString::new(systems_dir).unwrap(),
-
-            is_global: false
+            system_path : CString::new(systems_dir).unwrap()
         }
-    }
-}
-
-impl Drop for FrontendState {
-    fn drop(&mut self) {
-        unsafe {
-            self.done_current();
-        }
-    }
-}
-
-/// Reference to the current frontend. Necessary for
-static mut FRONTEND : Option<*mut FrontendState> = None;
-
-/// Returns the current frontend, or panics if one is not available.
-pub fn get_current_frontend() -> &'static mut FrontendState {
-    unsafe {
-        transmute(FRONTEND.unwrap())
     }
 }

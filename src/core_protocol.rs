@@ -1,7 +1,5 @@
 /// Describes and implements the protocol used between the frontend and cores over IPC.
 
-use std::borrow::BorrowMut;
-
 use std::io::Read;
 use std::io::Write;
 
@@ -18,6 +16,10 @@ use bincode::{deserialize, serialize};
 use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 
 use std::collections::HashMap;
+use retro_types::RetroVariable;
+use std::sync::Arc;
+use std::sync::Mutex;
+use retro_types::RetroAvInfo;
 
 /// Defines the various types of video refresh that can occur.
 #[derive(Deserialize, Serialize)]
@@ -38,11 +40,10 @@ pub enum VideoRefreshType {
 #[derive(Deserialize, Serialize)]
 pub enum ProtocolMessageType {
     // Backend -> Frontend messages
-    /// Environment command.
-    Environment {
-        /// If this environment call should block (i.e we want a response).
-        blocking : bool,
-    },
+    /// Set variables for the frontend.
+    SetVariables(Vec<RetroVariable>),
+    /// Returns a particular variable setting. Blocking.
+    GetVariable(String),
     /// Called when the core is ready to submit an audio frame.
     VideoRefresh(VideoRefreshType),
     /// Core submitting >=1 audio samples.
@@ -60,36 +61,41 @@ pub enum ProtocolMessageType {
     SystemInfoResponse(RetroSystemInfo),
     /// A response to an API version query.
     APIVersionResponse(u32),
+    /// A response to an A/V query.
+    AVInfoResponse(RetroAvInfo),
 
     // Frontend -> Backend messages
     /// Informs the core to warmup.
     Init,
     /// Informs the core to shutdown.
     Deinit,
+    /// Informs the core to load something.
+    Load(String),
     /// Returns the API version from the core. Blocking.
     APIVersion,
+    /// Returns the A/V info for this core. Blocking.
+    AVInfo,
     /// Informs the core to run for a frame.
     Run,
     /// Informs the core to reset the application from the beginning.
     Reset,
     /// Returns the current core information. Blocking.
     SystemInfo,
-    /// A response that should be inserted into the referenced memory.
-    /// This is a raw array as we can append length to a Vec, but raw memory (used in C->Rust
-    /// comms) coming from original environment calls has variable length.
-    EnvironmentResponse(Vec<u8>),
     /// A response for what the current input state is.
-    InputResponse(i16)
+    InputResponse(i16),
+    /// Returns a value contained within a variable.
+    GetVariableResponse(Option<String>)
 }
 
 impl ProtocolMessageType {
     /// Returns if this message should be blocked on.
     pub fn is_blocking(&self) -> bool {
         match self {
-            &ProtocolMessageType::Environment { blocking, .. } => blocking,
             &ProtocolMessageType::InputState { .. } => true,
             &ProtocolMessageType::APIVersion { .. } => true,
             &ProtocolMessageType::SystemInfo { .. } => true,
+            &ProtocolMessageType::GetVariable { .. } => true,
+            &ProtocolMessageType::AVInfo { .. } => true,
             _ => false
         }
     }
@@ -98,10 +104,11 @@ impl ProtocolMessageType {
     /// a callback.
     pub fn is_response(&self) -> bool {
         match self {
-            &ProtocolMessageType::EnvironmentResponse( .. ) => true,
             &ProtocolMessageType::InputResponse( .. ) => true,
             &ProtocolMessageType::SystemInfoResponse( .. ) => true,
             &ProtocolMessageType::APIVersionResponse( .. ) => true,
+            &ProtocolMessageType::GetVariableResponse( .. ) => true,
+            &ProtocolMessageType::AVInfoResponse( .. ) => true,
             _ => false
         }
     }
@@ -116,19 +123,6 @@ pub struct ProtocolMessage {
     data : ProtocolMessageType,
 }
 
-impl ProtocolMessage {
-    /// Returns if this message should be blocked on.
-    pub fn is_blocking(&self) -> bool {
-        self.data.is_blocking()
-    }
-
-    /// Returns if this message is a response to something, and should be thrown through
-    /// a callback.
-    pub fn is_response(&self) -> bool {
-        self.data.is_response()
-    }
-}
-
 /// A polling future where the future of the result can be found.
 pub struct ProtocolFuture {
     receiver: Receiver<ProtocolMessageType>,
@@ -136,21 +130,6 @@ pub struct ProtocolFuture {
 }
 
 impl ProtocolFuture {
-    /// Tries to get a response, None otherwise. Doesn't block.
-    pub fn try(&mut self) -> Option<ProtocolMessageType> {
-        if self.already_recv {
-            panic!("Already fetched a future!");
-        }
-
-        match self.receiver.try_recv() {
-            Ok(v) => {
-                self.already_recv = true;
-                Some(v)
-            },
-            Err(_) => None
-        }
-    }
-
     /// Polls for a response. Panics if value unable to be received.
     pub fn poll(&mut self) -> ProtocolMessageType {
         if self.already_recv {
@@ -167,19 +146,35 @@ impl ProtocolFuture {
     }
 }
 
-/// A server (which can run on either end) which handles I/O.
-pub struct ProtocolAdapter {
+/// Interface to handle incoming events from a ProtocolAdapter
+pub struct ProtocolEvents {
+    incoming_rx : Receiver<ProtocolMessage>,
     outgoing_tx : Sender<(Sender<ProtocolMessageType>, ProtocolMessageType, Option<u64>)>
 }
 
-/// Used internally for a select operation.
-enum HandlingMessage {
-    IncomingPacket(ProtocolMessage),
-    /// A packet ready for transmission.
-    /// Option<u64>: Forces the packet ID to be something (i.e for something which
-    ///              demands a response).
-    OutgoingPacket((Sender<ProtocolMessageType>,
-                    ProtocolMessageType, Option<u64>))
+impl ProtocolEvents {
+    /// Receives an incoming event. Blocking.
+    /// Returns: message, optional handler to reply.
+    pub fn poll(&self) -> (ProtocolMessageType, Box<Fn(ProtocolMessageType)>) {
+        let incoming = self.incoming_rx.recv().unwrap();
+
+        let id = incoming.id;
+        let cloned_tx = self.outgoing_tx.clone();
+
+        (incoming.data, Box::new(move |message| {
+            // Create a dud callback - we don't support callbacks in callbacks (yet)
+            let (null_tx, _): (Sender<ProtocolMessageType>,
+                                     Receiver<ProtocolMessageType>) = mpsc::channel();
+
+            // Send our response
+            cloned_tx.send((null_tx, message, Some(id))).unwrap();
+        }))
+    }
+}
+
+/// A server (which can run on either end) which handles I/O.
+pub struct ProtocolAdapter {
+    outgoing_tx : Sender<(Sender<ProtocolMessageType>, ProtocolMessageType, Option<u64>)>
 }
 
 impl ProtocolAdapter {
@@ -206,8 +201,8 @@ impl ProtocolAdapter {
     /// Creates a new protocol adapter with the specified input/output streams.
     /// on_receive: function called when a protocol message is received. Optional return
     ///             for a response to the client/server.
-    pub fn new(mut input : Box<Read + Send>, mut output : Box<Write + Send>,
-        on_receive : fn(&ProtocolMessageType) -> Option<ProtocolMessageType>) -> ProtocolAdapter {
+    pub fn new(mut input : Box<Read + Send>, mut output : Box<Write + Send>)
+        -> (ProtocolAdapter, ProtocolEvents) {
         // -- Socket handling
         // Packets that are incoming get their own decode thread
         let (decode_tx, decode_rx): (Sender<ProtocolMessage>,
@@ -254,82 +249,76 @@ impl ProtocolAdapter {
                                          Receiver<(Sender<ProtocolMessageType>,
                                                    ProtocolMessageType, Option<u64>)>) = mpsc::channel();
 
-        // Packets coming from the handler to this adapter
-        let (incoming_tx, incoming_rx): (Sender<ProtocolMessage>,
-                                         Receiver<ProtocolMessage>) = mpsc::channel();
+        let callbacks : Arc<Mutex<HashMap<u64, Sender<ProtocolMessageType>>>> =
+            Arc::new(Mutex::new(HashMap::new()));
 
-        // Event loop
+        // Incoming event loop
         let callback_outgoing_tx = outgoing_tx.clone();
 
+        // Packs sent from the event loop to the event handler
+        let (callback_incoming_tx, callback_incoming_rx): (Sender<ProtocolMessage>,
+                                                           Receiver<ProtocolMessage>) = mpsc::channel();
+
+        let incoming_callbacks = callbacks.clone();
         thread::spawn(move || {
-            let mut packet_counter : u64 = 0;
-
-            let mut callbacks : HashMap<u64, Sender<ProtocolMessageType>> = HashMap::new();
-
             loop {
-                // Bit of wrapping to be able to use the match operator effectively
-                let action : HandlingMessage = select! {
-                    incoming_packet = decode_rx.recv() => {
-                        HandlingMessage::IncomingPacket(incoming_packet.unwrap())
-                    },
-                    outgoing_packet = outgoing_rx.recv() => {
-                        HandlingMessage::OutgoingPacket(outgoing_packet.unwrap())
-                    }
-                };
+                let packet = decode_rx.recv().unwrap();
 
-                match action {
-                    HandlingMessage::IncomingPacket(packet) => {
-                        if packet.is_response() {
-                            // Call a specified callback handler
-                            callbacks[&packet.id].send(packet.data).unwrap();
-                        } else {
-                            // Call the on_receive method for generic packets
-                            let response = on_receive(&packet.data);
-                            match response {
-                                Some(v) => {
-                                    // Create a dud callback - we don't support callbacks in callbacks
-                                    let (null_tx, null_rx): (Sender<ProtocolMessageType>,
-                                                             Receiver<ProtocolMessageType>) = mpsc::channel();
-
-                                    // Send our response
-                                    callback_outgoing_tx.send((null_tx, v, Some(packet.id))).unwrap();
-                                },
-                                _ => {}
-                            }
-                        }
-                    },
-                    HandlingMessage::OutgoingPacket((channel, packet, id)) => {
-                        // Allocate a packet ID for this packet
-                        let packet_id = match id {
-                            Some(v) => v,
-                            _ => {
-                                let packet_id = packet_counter;
-                                packet_counter += 1;
-                                packet_counter
-                            }
-                        };
-
-                        // Insert our callback if needed
-                        if packet.is_blocking() {
-                            callbacks.insert(packet_id, channel);
-                        }
-
-                        // Build our main structure
-                        let final_packet = ProtocolMessage {
-                            id: packet_id,
-                            data: packet
-                        };
-
-                        // Send the packet to its destination
-                        // TODO: Handle errors
-                        encode_tx.send(final_packet).unwrap();
-                    }
+                if packet.data.is_response() {
+                    // Call a specified callback handler
+                    incoming_callbacks.lock().unwrap().remove(&packet.id).unwrap().send(packet.data).unwrap();
+                } else {
+                    // We don't want to block the event loop
+                    callback_incoming_tx.send(packet).unwrap();
                 }
             }
         });
 
-        ProtocolAdapter {
+        // Outgoing event loop
+        let outgoing_callbacks = callbacks;
+        thread::spawn(move || {
+            let mut packet_counter : u64 = 0;
+
+            loop {
+                let (channel, packet,
+                    id) = outgoing_rx.recv().unwrap();
+
+                // Allocate a packet ID for this packet
+                let packet_id = match id {
+                    Some(v) => v,
+                    _ => {
+                        let packet_id = packet_counter;
+                        packet_counter += 1;
+                        packet_id
+                    }
+                };
+
+                // Insert our callback if needed
+                if packet.is_blocking() {
+                    outgoing_callbacks.lock().unwrap().insert(packet_id, channel);
+                }
+
+                // Build our main structure
+                let final_packet = ProtocolMessage {
+                    id: packet_id,
+                    data: packet
+                };
+
+                // Send the packet to its destination
+                // TODO: Handle errors
+                encode_tx.send(final_packet).unwrap();
+            }
+        });
+
+        let events = ProtocolEvents {
+            incoming_rx: callback_incoming_rx,
+            outgoing_tx: callback_outgoing_tx
+        };
+
+        let adapter = ProtocolAdapter {
             outgoing_tx
-        }
+        };
+
+        (adapter, events)
     }
 }

@@ -1,7 +1,4 @@
 #![feature(vec_remove_item)]
-#![feature(mpsc_select)]
-
-extern crate libloading as lib;
 
 extern crate serde;
 #[macro_use]
@@ -10,94 +7,60 @@ extern crate bincode;
 
 extern crate byteorder;
 
+#[macro_use]
+extern crate clap;
+
 mod audio;
 mod input;
 mod graphics;
+mod backend;
+mod frontend;
 
-mod state;
 mod retro_types;
-mod core;
-mod callbacks;
 mod ffi;
 mod core_protocol;
 
-use core::LibRetroCore;
-
-use state::FrontendState;
-
-use retro_types::RetroPixelFormat;
-
-use std::path::Path;
-
-use std::{thread, time};
+use clap::{Arg, App};
 
 fn main() {
-    println!("Loading library...");
-    let library = lib::Library::new("melonds_libretro.dll").unwrap();
+    let matches = App::new("OxRetro")
+        .version(crate_version!())
+        .author("Selby <jselby@jselby.net>")
+        .about("A multi-process LibRetro implementation")
+        .arg(Arg::with_name("type")
+            .long("type")
+            .default_value("frontend")
+            .help("Internal use only")
+            .takes_value(true))
+        .arg(Arg::with_name("port")
+            .long("port")
+            .help("Internal use only")
+            .takes_value(true))
+        .arg(Arg::with_name("core")
+            .long("core")
+            .help("The core to load")
+            .takes_value(true))
+        .arg(Arg::with_name("rom")
+            .long("rom")
+            .help("The rom to load")
+            .takes_value(true))
+        .get_matches();
 
-    println!("Configuring environment...");
-    let core = LibRetroCore::from_library(library);
+    match matches.value_of("type").unwrap() {
+        "frontend" => {
+            let core = matches.value_of("core").unwrap().to_owned();
+            let rom = matches.value_of("rom").unwrap().to_owned();
 
-    println!("Core info:");
-    let info = core.get_system_info().unwrap();
-    println!("{:?}", info);
+            frontend::run(core, rom);
+        },
+        "backend" => {
+            let port = matches.value_of("port").unwrap().parse::<u16>().unwrap();
+            let core = matches.value_of("core").unwrap().to_owned();
 
-    let mut frontend = FrontendState::new(None, None, info,
-                                          RetroPixelFormat::Format0RGB1555);
-
-    unsafe {
-        frontend.make_current();
-    }
-
-    core.configure_callbacks().unwrap();
-
-    println!("Core init:");
-    core.init().unwrap();
-
-
-    println!("Load:");
-    println!("{:?}", core.load_game(Some(Path::new("rom2.nds"))).unwrap());
-
-    println!("Building context...");
-    let mut renderer = graphics::build(false, false).unwrap();
-
-    renderer.set_title(format!("OxRetro - {} ({})", frontend.info.library_name,
-                               frontend.info.library_version));
-
-    println!("Av:");
-    let av_info = core.get_av_info().unwrap();
-
-    println!("Endgame:");
-    frontend.renderer = Some(renderer);
-
-    let audio = audio::build(av_info.timing.sample_rate as u32).unwrap();
-
-    frontend.audio = Some(audio);
-
-    println!("Palette: {:?}", frontend.format);
-    println!("Loop:");
-    let max_frame = time::Duration::from_millis(16);
-
-    while frontend.is_alive() {
-        let start_loop = time::Instant::now();
-
-        core.run().unwrap();
-
-        frontend.variables_dirty = false;
-
-        let elapsed = start_loop.elapsed();
-        if elapsed < max_frame {
-            let sleep_time = max_frame - elapsed;
-
-            thread::sleep(sleep_time);
+            backend::run(core, port);
+        },
+        _ => {
+            panic!("Unknown type!")
         }
     }
-
-    println!("Core unload:");
-    core.unload_game().unwrap();
-
-    println!("Core deinit:");
-    core.deinit().unwrap();
-
-    println!("All done!");
 }

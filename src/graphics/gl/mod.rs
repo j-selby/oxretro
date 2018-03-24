@@ -32,6 +32,12 @@ pub struct GLRenderer {
 impl Drop for GLRenderer {
     fn drop(&mut self) {
         println!("Dropping!");
+        unsafe {
+            self::gl::DeleteVertexArrays(1, &self.vao);
+            self::gl::DeleteBuffers(2, [self.ebo, self.vb].as_ptr());
+            self::gl::DeleteTextures(1, &self.tex);
+            self::gl::DeleteProgram(self.program);
+        }
     }
 }
 
@@ -50,6 +56,7 @@ impl Renderer for GLRenderer {
             self::gl::ActiveTexture(self::gl::TEXTURE0);
             self::gl::BindTexture(self::gl::TEXTURE_2D, self.tex);
 
+            self::gl::BindVertexArray(self.vao);
             self::gl::Uniform1i(self::gl::GetUniformLocation(self.program, b"tex\0".as_ptr() as *const _), 0);
             self::gl::TexParameteri(self::gl::TEXTURE_2D, self::gl::TEXTURE_WRAP_S, self::gl::CLAMP_TO_EDGE as self::gl::types::GLint);
             self::gl::TexParameteri(self::gl::TEXTURE_2D, self::gl::TEXTURE_WRAP_T, self::gl::CLAMP_TO_EDGE as self::gl::types::GLint);
@@ -97,7 +104,7 @@ impl Renderer for GLRenderer {
                             self::gl::Viewport(0, 0, w as _, h as _);
                         }
                     },
-                    glutin::WindowEvent::KeyboardInput { device_id, input } => {
+                    glutin::WindowEvent::KeyboardInput { input, .. } => {
                         match input.virtual_keycode {
                             Some(v) => {
                                 if input.state == glutin::ElementState::Pressed

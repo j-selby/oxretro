@@ -1,6 +1,6 @@
 /// Represents an external LibRetroCore.
 
-use lib;
+use backend::lib;
 
 use std::io;
 use std::fs::File;
@@ -9,7 +9,7 @@ use std::path::Path;
 use std::io::Read;
 
 use retro_types::*;
-use callbacks::*;
+use backend::callbacks::*;
 
 // Core interface
 pub struct LibRetroCore {
@@ -171,6 +171,26 @@ impl LibRetroCore {
         }
 
         Ok(())
+    }
+
+    pub fn reset(&self) -> Result<(), CoreError> {
+        unsafe {
+            let func: lib::Symbol<RetroResetFn> =
+                translate_lib_result(self.library.get(b"retro_reset"))?;
+
+            func();
+        }
+
+        Ok(())
+    }
+
+    pub fn get_api_version(&self) -> Result<u32, CoreError> {
+        unsafe {
+            let func: lib::Symbol<RetroApiVersionFn> =
+                translate_lib_result(self.library.get(b"retro_api_version"))?;
+
+            Ok(func())
+        }
     }
 
     pub fn from_library(library : lib::Library) -> LibRetroCore {
