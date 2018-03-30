@@ -307,10 +307,22 @@ impl ProtocolAdapter {
 
                 if packet.data.is_response() {
                     // Call a specified callback handler
-                    incoming_callbacks.lock().unwrap().remove(&packet.id).unwrap().send(packet.data).unwrap();
+                    let handler = incoming_callbacks.lock().unwrap().remove(&packet.id).unwrap();
+                    match handler.send(packet.data) {
+                        Err(_) => {
+                            println!("Incoming event loop warning: registered callback invalid.");
+                        }
+                        _ => {}
+                    }
                 } else {
                     // We don't want to block the event loop
-                    callback_incoming_tx.send(packet).unwrap();
+                    match callback_incoming_tx.send(packet) {
+                        Err(_) => {
+                            println!("Incoming event loop failed: main thread has disappeared, and we are now orphaned");
+                            break
+                        }
+                        _ => {}
+                    };
                 }
             }
         }).unwrap();
