@@ -35,12 +35,6 @@ impl<I> ChannelsCountConverter<I>
             next_output_sample_pos: 0,
         }
     }
-
-    /// Destroys this iterator and returns the underlying iterator.
-    #[inline]
-    pub fn into_inner(self) -> I {
-        self.input
-    }
 }
 
 impl<I> Iterator for ChannelsCountConverter<I>

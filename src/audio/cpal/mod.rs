@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use self::conversions::*;
-use std::sync::mpsc::channel;
 
 use std::u16::MAX as u16_max;
 use std::i16::MAX as i16_max;
@@ -90,12 +89,11 @@ pub fn build(sample_rate : u32) -> Box<AudioBackend> {
 
     let thread_mutex = sample_mutex.clone();
 
-    thread::spawn(move || {
+    thread::Builder::new().name("cpal-audio".to_owned()).spawn(move || {
 
         let device = cpal::default_output_device().expect("Failed to get default output device");
         let format = device.default_output_format().expect("Failed to get default output format");
         let target_sample_rate = format.sample_rate;
-        let sample_format = format.data_type;
         let sample_channels = format.channels;
 
         let counter = AudioCounter {
@@ -158,7 +156,7 @@ pub fn build(sample_rate : u32) -> Box<AudioBackend> {
             sink.append(buffer);
             sink.play();
         }*/
-    });
+    }).unwrap();
 
     Box::new(
         RodioBackend {

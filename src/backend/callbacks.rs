@@ -121,7 +121,6 @@ pub unsafe extern "C" fn environment_callback(cmd : c_uint, data : *const c_void
         },
         RetroEnvironment::GetSystemDirectory => {
             let frontend = get_current_backend();
-            println!("We have backend!");
             *(data as *mut *const c_char) = frontend.system_path.as_ptr() as *const _;
             true
         },

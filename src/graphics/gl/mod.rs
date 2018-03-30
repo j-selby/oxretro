@@ -36,7 +36,6 @@ pub struct GLRenderer {
 
 impl Drop for GLRenderer {
     fn drop(&mut self) {
-        println!("Dropping!");
         unsafe {
             self::gl::DeleteVertexArrays(1, &self.vao);
             self::gl::DeleteBuffers(2, [self.ebo, self.vb].as_ptr());

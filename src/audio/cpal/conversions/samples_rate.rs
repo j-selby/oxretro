@@ -86,12 +86,6 @@ impl<I> SamplesRateConverter<I>
         }
     }
 
-    /// Destroys this iterator and returns the underlying iterator.
-    #[inline]
-    pub fn into_inner(self) -> I {
-        self.input
-    }
-
     fn next_input_frame(&mut self) {
         self.current_frame_pos_in_chunk += 1;
 

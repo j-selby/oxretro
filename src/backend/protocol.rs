@@ -39,7 +39,7 @@ pub fn run(core : String, address : String) {
     let output = Box::new(stream.try_clone().unwrap());
     // TODO: Consume events on the main thread
     let (comms, events) =
-        ProtocolAdapter::new(input, output);
+        ProtocolAdapter::new("backend".to_owned(),input, output);
 
     // Store comms for later
     let boxed_comms = Arc::new(Mutex::new(comms));
@@ -53,7 +53,10 @@ pub fn run(core : String, address : String) {
     }
 
     loop {
-        let (event, callback) = events.poll();
+        let (event, callback) = match events.poll() {
+            Some(v) => v,
+            None => break
+        };
 
         let lock = core.lock().unwrap();
 
@@ -62,6 +65,7 @@ pub fn run(core : String, address : String) {
             ProtocolMessageType::Init => lock.init().unwrap(),
             ProtocolMessageType::Deinit => lock.deinit().unwrap(),
             ProtocolMessageType::Load(name) => assert!(lock.load_game(Some(Path::new(&name))).unwrap()),
+            ProtocolMessageType::Unload => lock.unload_game().unwrap(),
             ProtocolMessageType::APIVersion => callback(ProtocolMessageType::APIVersionResponse(lock.get_api_version().unwrap())),
             ProtocolMessageType::Run => lock.run().unwrap(),
             ProtocolMessageType::Reset => lock.reset().unwrap(),

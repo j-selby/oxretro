@@ -8,18 +8,20 @@ use std::thread;
 use std::sync::mpsc::Sender;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc;
+use std::sync::Arc;
+use std::sync::Mutex;
+
+use std::collections::HashMap;
+
+use std::error::Error;
 
 use retro_types::RetroSystemInfo;
+use retro_types::RetroVariable;
+use retro_types::RetroAvInfo;
 
 use bincode::{deserialize, serialize};
 
 use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
-
-use std::collections::HashMap;
-use retro_types::RetroVariable;
-use std::sync::Arc;
-use std::sync::Mutex;
-use retro_types::RetroAvInfo;
 
 /// Defines the various types of video refresh that can occur.
 #[derive(Deserialize, Serialize)]
@@ -73,6 +75,8 @@ pub enum ProtocolMessageType {
     Deinit,
     /// Informs the core to load something.
     Load(String),
+    /// Informs the core to unload.
+    Unload,
     /// Returns the API version from the core. Blocking.
     APIVersion,
     /// Returns the A/V info for this core. Blocking.
@@ -159,20 +163,25 @@ pub struct ProtocolEvents {
 impl ProtocolEvents {
     /// Receives an incoming event. Blocking.
     /// Returns: message, optional handler to reply.
-    pub fn poll(&self) -> (ProtocolMessageType, Box<Fn(ProtocolMessageType)>) {
-        let incoming = self.incoming_rx.recv().unwrap();
+    pub fn poll(&self) -> Option<(ProtocolMessageType, Box<Fn(ProtocolMessageType)>)> {
+        let incoming = match self.incoming_rx.recv() {
+            Ok(v) => v,
+            Err(_) => {
+                return None;
+            }
+        };
 
         let id = incoming.id;
         let cloned_tx = self.outgoing_tx.clone();
 
-        (incoming.data, Box::new(move |message| {
+        Some((incoming.data, Box::new(move |message| {
             // Create a dud callback - we don't support callbacks in callbacks (yet)
             let (null_tx, _): (Sender<ProtocolMessageType>,
                                      Receiver<ProtocolMessageType>) = mpsc::channel();
 
             // Send our response
             cloned_tx.send((null_tx, message, Some(id))).unwrap();
-        }))
+        })))
     }
 }
 
@@ -205,26 +214,41 @@ impl ProtocolAdapter {
     /// Creates a new protocol adapter with the specified input/output streams.
     /// on_receive: function called when a protocol message is received. Optional return
     ///             for a response to the client/server.
-    pub fn new(mut input : Box<Read + Send>, mut output : Box<Write + Send>)
+    pub fn new(name : String, mut input : Box<Read + Send>, mut output : Box<Write + Send>)
         -> (ProtocolAdapter, ProtocolEvents) {
         // -- Socket handling
         // Packets that are incoming get their own decode thread
         let (decode_tx, decode_rx): (Sender<ProtocolMessage>,
                                      Receiver<ProtocolMessage>) = mpsc::channel();
 
-        thread::spawn(move || {
+        let decode_thread_name = name.clone();
+        thread::Builder::new().name(format!("{}-decode", name)).spawn(move || {
             // Handle incoming packets
             loop {
                 let input: &mut Read = &mut input;
-                // TODO: Actually handle errors
-                let length = input.read_u64::<LittleEndian>().unwrap();
+
+                let length = match input.read_u64::<LittleEndian>() {
+                    Ok(v) => v,
+                    Err(e) => {
+                        println!("{} incoming data thread is shutting down: {}", decode_thread_name,
+                                 e.description());
+                        break;
+                    }
+                };
                 let mut data = vec![0 as u8; length as usize];
-                input.read_exact(&mut data).unwrap();
+                match input.read_exact(&mut data) {
+                    Err(e) => {
+                        println!("{} incoming data thread is shutting down: {}", decode_thread_name,
+                                 e.description());
+                        break;
+                    },
+                    _ => {}
+                };
 
                 let packet : ProtocolMessage = deserialize(&data).unwrap();
                 decode_tx.send(packet).unwrap();
             }
-        });
+        }).unwrap();
 
         // decode_rx is now the interface to receive packets
 
@@ -232,17 +256,27 @@ impl ProtocolAdapter {
         let (encode_tx, encode_rx): (Sender<ProtocolMessage>,
                                      Receiver<ProtocolMessage>) = mpsc::channel();
 
-        thread::spawn(move || {
+        let encode_thread_name = name.clone();
+        thread::Builder::new().name(format!("{}-encode", name)).spawn(move || {
             // Handle outgoing threads
             for i in encode_rx.iter() {
                 let output: &mut Write = &mut output;
-                // TODO: Actually handle errors
                 let mut data = serialize(&i).unwrap();
 
-                output.write_u64::<LittleEndian>(data.len() as u64).unwrap();
-                output.write_all(&mut data).unwrap();
+                let mut final_packet = Vec::new();
+                final_packet.write_u64::<LittleEndian>(data.len() as u64).unwrap();
+                final_packet.append(&mut data);
+
+                match output.write_all(&mut final_packet) {
+                    Err(e) => {
+                        println!("{} outgoing data thread is shutting down: {}", encode_thread_name,
+                                 e.description());
+                        break;
+                    },
+                    _ => {}
+                };
             }
-        });
+        }).unwrap();
 
         // encode_tx is now the interface to send packets
 
@@ -264,9 +298,12 @@ impl ProtocolAdapter {
                                                            Receiver<ProtocolMessage>) = mpsc::channel();
 
         let incoming_callbacks = callbacks.clone();
-        thread::spawn(move || {
+        thread::Builder::new().name(format!("{}-incoming", name)).spawn(move || {
             loop {
-                let packet = decode_rx.recv().unwrap();
+                let packet = match decode_rx.recv() {
+                    Err(_) => break,
+                    Ok(v) => v
+                };
 
                 if packet.data.is_response() {
                     // Call a specified callback handler
@@ -276,16 +313,19 @@ impl ProtocolAdapter {
                     callback_incoming_tx.send(packet).unwrap();
                 }
             }
-        });
+        }).unwrap();
 
         // Outgoing event loop
         let outgoing_callbacks = callbacks;
-        thread::spawn(move || {
+        thread::Builder::new().name(format!("{}-outgoing", name)).spawn(move || {
             let mut packet_counter : u64 = 0;
 
             loop {
                 let (channel, packet,
-                    id) = outgoing_rx.recv().unwrap();
+                    id) = match outgoing_rx.recv() {
+                    Err(_) => break,
+                    Ok(v) => v
+                };
 
                 // Allocate a packet ID for this packet
                 let packet_id = match id {
@@ -309,10 +349,12 @@ impl ProtocolAdapter {
                 };
 
                 // Send the packet to its destination
-                // TODO: Handle errors
-                encode_tx.send(final_packet).unwrap();
+                match encode_tx.send(final_packet) {
+                    Err(_) => break,
+                    _ => {}
+                }
             }
-        });
+        }).unwrap();
 
         let events = ProtocolEvents {
             incoming_rx: callback_incoming_rx,

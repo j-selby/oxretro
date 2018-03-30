@@ -20,8 +20,7 @@ pub struct LibRetroCore {
 #[derive(Debug)]
 pub enum CoreError {
     BadLibrary(io::Error),
-    BadEncoding(Utf8Error),
-    FileLoadError(io::Error)
+    BadEncoding(Utf8Error)
 }
 
 fn translate_lib_result<T>(result : Result<T, io::Error>) -> Result<T, CoreError> {

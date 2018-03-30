@@ -18,12 +18,6 @@ impl<I, O> DataConverter<I, O> {
             marker: PhantomData,
         }
     }
-
-    /// Destroys this iterator and returns the underlying iterator.
-    #[inline]
-    pub fn into_inner(self) -> I {
-        self.input
-    }
 }
 
 impl<I, O> Iterator for DataConverter<I, O>

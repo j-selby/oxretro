@@ -12,10 +12,7 @@ use std::net::TcpListener;
 use std::process::Command;
 use std::process::Stdio;
 
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::thread;
-use std::time;
 use graphics;
 use audio;
 use core_protocol::VideoRefreshType;
@@ -38,7 +35,7 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
     // Start up a client
     if !dont_spawn_core {
         let exe_path = current_exe().unwrap();
-        let process = Command::new(exe_path)
+        let _process = Command::new(exe_path)
             .arg("--type").arg("backend")
             .arg("--address").arg(&format!("127.0.0.1:{}", port))
             .arg("--core").arg(&core.unwrap())
@@ -54,28 +51,22 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
     let (stream, _) = server.accept().unwrap();
     println!("Client online!");
 
-    let frontend = FrontendState::new(None, None, None);
-    // TODO: RWLock would be much better! Do for all other mutexes as well
-    let frontend = Arc::new(Mutex::new(frontend));
+    let mut frontend = FrontendState::new(None, None, None);
 
     let stdin = Box::new(stream.try_clone().unwrap());
     let stdout = Box::new(stream.try_clone().unwrap());
     // TODO: Handle events
-    let (protocol, events) = ProtocolAdapter::new(stdin,
-                                                  stdout);
+    let (protocol, events) = ProtocolAdapter::new("frontend".to_owned(),
+                                                  stdin, stdout);
 
     // Request system info
-    {
-        let data =
-            match protocol.send(ProtocolMessageType::SystemInfo).unwrap().unwrap() {
-                ProtocolMessageType::SystemInfoResponse(info) => info,
-                _ => panic!("Bad response to system info!")
-            };
-        frontend.lock().unwrap().info = Some(data);
-    }
-
-    println!("Got info:");
-    println!("{:?}", frontend.lock().unwrap().info);
+    let data =
+        match protocol.send(ProtocolMessageType::SystemInfo).unwrap().unwrap() {
+            ProtocolMessageType::SystemInfoResponse(info) => info,
+            _ => panic!("Bad response to system info!")
+        };
+    println!("Loaded core: {:?}", data.library_name);
+    frontend.info = Some(data);
 
     let av_info = match protocol.send(ProtocolMessageType::AVInfo)
         .unwrap().unwrap() {
@@ -83,58 +74,32 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
         _ => panic!("Unknown A/V info")
     };
 
-    println!("AV get!");
-
-
     protocol.send(ProtocolMessageType::Init);
     protocol.send(ProtocolMessageType::Load(rom));
 
     // Finish up our frontend
-    println!("Renderer:");
     let mut renderer = graphics::build(false, false).unwrap();
 
-    {
-        let frontend = frontend.lock().unwrap();
-        match &frontend.info {
-            &Some(ref v) => renderer.set_title(format!("OxRetro - {} ({})", v.library_name,
-                                           v.library_version)),
-            _ => panic!("Missing frontend info?")
-        }
+    match &frontend.info {
+        &Some(ref v) => renderer.set_title(format!("OxRetro - {} ({})", v.library_name,
+                                       v.library_version)),
+        _ => panic!("Missing frontend info?")
     }
 
-    {
-        frontend.lock().unwrap().renderer = Some(renderer);
-    }
+    frontend.renderer = Some(renderer);
 
-
-    println!("Audio:");
-    let audio_size_callback;
-
-    {
-        let audio = audio::build(av_info.timing.sample_rate as u32).unwrap();
-        audio_size_callback = audio.get_done_callback();
-        frontend.lock().unwrap().audio = Some(audio);
-    }
+    let audio = audio::build(av_info.timing.sample_rate as u32).unwrap();
+    let audio_size_callback = audio.get_done_callback();
+    frontend.audio = Some(audio);
 
     // Signaling for the start of a frame. true if frames should continue to be sent
     let (frame_tx, frame_rx): (Sender<bool>,
                                Receiver<bool>) = mpsc::channel();
 
     // Create a thread for managing events
-    thread::spawn(move || {
-        //let max_frame = time::Duration::from_micros(16666);
-
+    thread::Builder::new().name("frontend-events".to_owned()).spawn(move || {
         loop {
-            //let start_loop = time::Instant::now();
-
             protocol.send(ProtocolMessageType::Run);
-
-            /*let elapsed = start_loop.elapsed();
-            if elapsed < max_frame {
-                let sleep_time = max_frame - elapsed;
-
-                thread::sleep(sleep_time);
-            }*/
 
             // TODO: busy loop
             while !audio_size_callback() {
@@ -142,19 +107,25 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
             }
 
             if !frame_rx.recv().unwrap() {
+                protocol.send(ProtocolMessageType::Unload);
                 break;
             }
         }
-    });
+    }).unwrap();
 
     // Start up our main loop - we no longer need to talk to the frontend
-    println!("Main loop!");
     loop {
-        let (event, callback) = events.poll();
+        let (event, callback) = match events.poll() {
+            Some(v) => v,
+            None => {
+                println!("Frontend was disconnected from client.");
+                break
+            }
+        };
 
         match event {
             ProtocolMessageType::GetVariable(name) => callback(ProtocolMessageType::GetVariableResponse(None)),
-            ProtocolMessageType::PollInput => frontend.lock().unwrap().poll_input(),
+            ProtocolMessageType::PollInput => frontend.poll_input(),
             ProtocolMessageType::InputState { id, .. } => {
                 let key = match id {
                     0 => InputKey::B,
@@ -177,7 +148,7 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
                 };
 
                 let result : i16;
-                match &mut frontend.lock().unwrap().renderer {
+                match &mut frontend.renderer {
                     &mut Some(ref mut v) => {
                         if v.is_key_down(&key) {
                             result = 1;
@@ -191,7 +162,7 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
                 callback(ProtocolMessageType::InputResponse(result));
             },
             ProtocolMessageType::VideoRefresh(refresh) => {
-                match &mut frontend.lock().unwrap().renderer {
+                match &mut frontend.renderer {
                     &mut Some(ref mut v) => {
                         match refresh {
                             VideoRefreshType::Software { framebuffer, width, height } => {
@@ -203,14 +174,14 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
                     &mut None => panic!("No renderer available!")
                 }
 
-                if !frontend.lock().unwrap().is_alive() {
+                if !frontend.is_alive() {
                     break;
                 }
 
                 frame_tx.send(true).unwrap();
             },
             ProtocolMessageType::AudioSample(samples) => {
-                match &mut frontend.lock().unwrap().audio {
+                match &mut frontend.audio {
                     &mut Some(ref mut v) => {
                         v.submit_frame(&samples);
                     },
@@ -224,73 +195,4 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
     }
 
     frame_tx.send(false).unwrap();
-
-    /*println!("Loading library...");
-    let library = lib::Library::new("melonds_libretro.dll").unwrap();
-
-    println!("Configuring environment...");
-    let core = LibRetroCore::from_library(library);
-
-    println!("Core info:");
-    let info = core.get_system_info().unwrap();
-    println!("{:?}", info);
-
-    let mut frontend = FrontendState::new(None, None, info,
-                                          RetroPixelFormat::Format0RGB1555);
-
-    unsafe {
-        frontend.make_current();
-    }
-
-    core.configure_callbacks().unwrap();
-
-    println!("Core init:");
-    core.init().unwrap();
-
-
-    println!("Load:");
-    println!("{:?}", core.load_game(Some(Path::new("rom2.nds"))).unwrap());
-
-    println!("Building context...");
-    let mut renderer = graphics::build(false, false).unwrap();
-
-    renderer.set_title(format!("OxRetro - {} ({})", frontend.info.library_name,
-                               frontend.info.library_version));
-
-    println!("Av:");
-    let av_info = core.get_av_info().unwrap();
-
-    println!("Endgame:");
-    frontend.renderer = Some(renderer);
-
-    let audio = audio::build(av_info.timing.sample_rate as u32).unwrap();
-
-    frontend.audio = Some(audio);
-
-    println!("Palette: {:?}", frontend.format);
-    println!("Loop:");
-    let max_frame = time::Duration::from_millis(16);
-
-    while frontend.is_alive() {
-        let start_loop = time::Instant::now();
-
-        core.run().unwrap();
-
-        frontend.variables_dirty = false;
-
-        let elapsed = start_loop.elapsed();
-        if elapsed < max_frame {
-            let sleep_time = max_frame - elapsed;
-
-            thread::sleep(sleep_time);
-        }
-    }
-
-    println!("Core unload:");
-    core.unload_game().unwrap();
-
-    println!("Core deinit:");
-    core.deinit().unwrap();
-
-    println!("All done!");*/
 }
