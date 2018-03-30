@@ -20,25 +20,34 @@ use graphics;
 use audio;
 use core_protocol::VideoRefreshType;
 use input::InputKey;
+use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
+use std::time::Duration;
 
 /// Starts listening for messages over a socket. Binds to the port as a server.
-pub fn run(core : String, rom : String) {
+pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_spawn_core : bool) {
     // Bind to our target port
-    let server = TcpListener::bind("127.0.0.1:0").unwrap();
+    let server = match address {
+        Some(v) => TcpListener::bind(v).unwrap(),
+        None => TcpListener::bind("127.0.0.1:0").unwrap()
+    };
 
     let port = server.local_addr().unwrap().port();
 
     // Start up a client
-    let exe_path = current_exe().unwrap();
-    let process = Command::new(exe_path)
-        .arg("--type").arg("backend")
-        .arg("--port").arg(&format!("{}", port))
-        .arg("--core").arg(&core)
-        .stdin(Stdio::null())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .expect("Unable to launch core process");
+    if !dont_spawn_core {
+        let exe_path = current_exe().unwrap();
+        let process = Command::new(exe_path)
+            .arg("--type").arg("backend")
+            .arg("--address").arg(&format!("127.0.0.1:{}", port))
+            .arg("--core").arg(&core.unwrap())
+            .stdin(Stdio::null())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("Unable to launch core process");
+    }
 
     // Wait for this client to come online
     println!("Waiting for client...");
@@ -76,27 +85,9 @@ pub fn run(core : String, rom : String) {
 
     println!("AV get!");
 
-    // Create a thread for managing events
-    thread::spawn(move || {
-        protocol.send(ProtocolMessageType::Init);
-        protocol.send(ProtocolMessageType::Load(rom));
 
-        let max_frame = time::Duration::from_millis(16);
-
-        // TODO: Provide kill condition
-        loop {//frontend.is_alive() {
-            let start_loop = time::Instant::now();
-
-            protocol.send(ProtocolMessageType::Run);
-
-            let elapsed = start_loop.elapsed();
-            if elapsed < max_frame {
-                let sleep_time = max_frame - elapsed;
-
-                thread::sleep(sleep_time);
-            }
-        }
-    });
+    protocol.send(ProtocolMessageType::Init);
+    protocol.send(ProtocolMessageType::Load(rom));
 
     // Finish up our frontend
     println!("Renderer:");
@@ -117,15 +108,50 @@ pub fn run(core : String, rom : String) {
 
 
     println!("Audio:");
+    let audio_size_callback;
+
     {
         let audio = audio::build(av_info.timing.sample_rate as u32).unwrap();
+        audio_size_callback = audio.get_done_callback();
         frontend.lock().unwrap().audio = Some(audio);
     }
+
+    // Signaling for the start of a frame. true if frames should continue to be sent
+    let (frame_tx, frame_rx): (Sender<bool>,
+                               Receiver<bool>) = mpsc::channel();
+
+    // Create a thread for managing events
+    thread::spawn(move || {
+        //let max_frame = time::Duration::from_micros(16666);
+
+        loop {
+            //let start_loop = time::Instant::now();
+
+            protocol.send(ProtocolMessageType::Run);
+
+            /*let elapsed = start_loop.elapsed();
+            if elapsed < max_frame {
+                let sleep_time = max_frame - elapsed;
+
+                thread::sleep(sleep_time);
+            }*/
+
+            // TODO: busy loop
+            while !audio_size_callback() {
+                thread::sleep(Duration::from_millis(1));
+            }
+
+            if !frame_rx.recv().unwrap() {
+                break;
+            }
+        }
+    });
 
     // Start up our main loop - we no longer need to talk to the frontend
     println!("Main loop!");
     loop {
         let (event, callback) = events.poll();
+
         match event {
             ProtocolMessageType::GetVariable(name) => callback(ProtocolMessageType::GetVariableResponse(None)),
             ProtocolMessageType::PollInput => frontend.lock().unwrap().poll_input(),
@@ -176,6 +202,12 @@ pub fn run(core : String, rom : String) {
                     },
                     &mut None => panic!("No renderer available!")
                 }
+
+                if !frontend.lock().unwrap().is_alive() {
+                    break;
+                }
+
+                frame_tx.send(true).unwrap();
             },
             ProtocolMessageType::AudioSample(samples) => {
                 match &mut frontend.lock().unwrap().audio {
@@ -190,6 +222,8 @@ pub fn run(core : String, rom : String) {
             }
         }
     }
+
+    frame_tx.send(false).unwrap();
 
     /*println!("Loading library...");
     let library = lib::Library::new("melonds_libretro.dll").unwrap();

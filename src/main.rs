@@ -1,4 +1,5 @@
 #![feature(vec_remove_item)]
+#![feature(duration_from_micros)]
 
 extern crate serde;
 #[macro_use]
@@ -30,37 +31,43 @@ fn main() {
         .arg(Arg::with_name("type")
             .long("type")
             .default_value("frontend")
-            .help("Internal use only")
-            .takes_value(true))
-        .arg(Arg::with_name("port")
-            .long("port")
-            .help("Internal use only")
+            .help("The kind of process that should be started")
             .takes_value(true))
         .arg(Arg::with_name("core")
             .long("core")
             .help("The core to load")
             .takes_value(true))
+        .arg(Arg::with_name("address")
+            .long("address")
+            .help("address:port of the frontend to connect to, or to bind to")
+            .takes_value(true))
         .arg(Arg::with_name("rom")
             .long("rom")
-            .help("The rom to load")
+            .help("[Frontend only] The rom to load")
             .takes_value(true))
+        .arg(Arg::with_name("no-backend")
+            .long("no-backend")
+            .help("[Frontend only] Starts a frontend without an associated backend"))
         .get_matches();
 
-    match matches.value_of("type").unwrap() {
-        "frontend" => {
-            let core = matches.value_of("core").unwrap().to_owned();
+    let process_type = matches.value_of("type").unwrap();
+    match &process_type {
+        &"frontend" => {
+            let core = matches.value_of("core").map(|v| v.to_owned());
+            let address = matches.value_of("address").map(|v| v.to_owned());
             let rom = matches.value_of("rom").unwrap().to_owned();
+            let spawn_core = matches.is_present("no-backend");
 
-            frontend::run(core, rom);
+            frontend::run(core, rom, address, spawn_core);
         },
-        "backend" => {
-            let port = matches.value_of("port").unwrap().parse::<u16>().unwrap();
+        &"backend" => {
+            let address = matches.value_of("address").unwrap().to_owned();
             let core = matches.value_of("core").unwrap().to_owned();
 
-            backend::run(core, port);
+            backend::run(core, address);
         },
         _ => {
-            panic!("Unknown type!")
+            panic!("Unknown type: {}", process_type)
         }
     }
 }

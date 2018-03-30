@@ -1,9 +1,12 @@
 extern crate glutin;
 extern crate gl;
+extern crate fps_counter;
 
 use self::glutin::EventsLoop;
 use self::glutin::GlContext;
 use self::glutin::GlWindow;
+
+use self::fps_counter::FPSCounter;
 
 use std::mem;
 use std::ptr;
@@ -25,7 +28,9 @@ pub struct GLRenderer {
     program : u32,
 
     keys : Vec<self::glutin::VirtualKeyCode>,
-    events_polled : bool
+    events_polled : bool,
+    title : String,
+    fps : FPSCounter
 
 }
 
@@ -122,6 +127,9 @@ impl Renderer for GLRenderer {
                 _ => ()
             }
         }
+
+        let formatted_title = format!("{} - FPS: {}", &self.title, self.fps.tick());
+        self.gl_window.set_title(&formatted_title);
     }
 
     fn is_alive(&self) -> bool {
@@ -155,7 +163,7 @@ impl Renderer for GLRenderer {
     }
 
     fn set_title(&mut self, title: String) {
-        self.gl_window.set_title(&title);
+        self.title = title;
     }
 }
 
@@ -163,7 +171,7 @@ pub fn build() -> Box<Renderer> {
     let events_loop = glutin::EventsLoop::new();
     let window = glutin::WindowBuilder::new()
         .with_title("OxRetro")
-        .with_dimensions(1280, 720);
+        .with_dimensions(400, 600);
     let context = glutin::ContextBuilder::new()
         .with_vsync(true);
     let gl_window = glutin::GlWindow::new(window,
@@ -250,7 +258,9 @@ pub fn build() -> Box<Renderer> {
             program,
 
             keys : Vec::new(),
-            events_polled : true
+            events_polled : true,
+            title : "OxRetro".to_owned(),
+            fps : FPSCounter::new()
         }
     )
 }

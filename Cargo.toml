@@ -8,7 +8,7 @@ libloading = "0.5.0"
 
 glutin = {version = "*", optional = true}
 gl = {version = "*", optional = true}
-rodio = {version = "0.6.0", optional = true, default-features = false}
+cpal = {version  = "0.8.0", optional = true}
 gilrs = {version = "0.6.0", optional = true}
 
 serde = "1.0.33"
@@ -18,8 +18,10 @@ byteorder = "1"
 
 clap = "2.31.2"
 
+fps_counter = "1.0.0"
+
 [features]
 graphics_opengl = ["gl", "glutin"]
-audio_rodio = ["rodio"]
+audio_cpal = ["cpal"]
 input_gilrs = ["gilrs"]
-default = ["graphics_opengl", "audio_rodio"]#, "input_gilrs"]
+default = ["graphics_opengl", "audio_cpal"]#, "input_gilrs"]

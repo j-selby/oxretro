@@ -18,17 +18,13 @@ use std::path::Path;
 static mut ADAPTER : Option<Arc<Mutex<ProtocolAdapter>>> = None;
 
 /// Starts listening for messages over a socket.
-pub fn run(core : String, port : u16) {
+pub fn run(core : String, address : String) {
     println!("Loading library...");
     let library = lib::Library::new(&core).unwrap();
 
     println!("Configuring environment...");
     // TODO: RWLock would be much better! Do for all other mutexes as well
     let core = Arc::new(Mutex::new(LibRetroCore::from_library(library)));
-
-    {
-        core.lock().unwrap().configure_callbacks().unwrap();
-    }
 
     let mut state = BackendState::new(RetroPixelFormat::Format0RGB1555);
 
@@ -37,7 +33,7 @@ pub fn run(core : String, port : u16) {
     }
 
     // TODO: Use alternate transport - ipc_channel doesn't support windows yet
-    let stream = TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
+    let stream = TcpStream::connect(address).unwrap();
 
     let input = Box::new(stream.try_clone().unwrap());
     let output = Box::new(stream.try_clone().unwrap());
@@ -49,6 +45,11 @@ pub fn run(core : String, port : u16) {
     let boxed_comms = Arc::new(Mutex::new(comms));
     unsafe {
         ADAPTER = Some(boxed_comms);
+    }
+
+    // Now that we have a connection, hook up our callbacks
+    {
+        core.lock().unwrap().configure_callbacks().unwrap();
     }
 
     loop {

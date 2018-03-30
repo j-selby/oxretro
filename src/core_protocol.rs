@@ -63,6 +63,8 @@ pub enum ProtocolMessageType {
     APIVersionResponse(u32),
     /// A response to an A/V query.
     AVInfoResponse(RetroAvInfo),
+    /// A response to a run query.
+    RunResponse,
 
     // Frontend -> Backend messages
     /// Informs the core to warmup.
@@ -75,7 +77,7 @@ pub enum ProtocolMessageType {
     APIVersion,
     /// Returns the A/V info for this core. Blocking.
     AVInfo,
-    /// Informs the core to run for a frame.
+    /// Informs the core to run for a frame. Blocking.
     Run,
     /// Informs the core to reset the application from the beginning.
     Reset,
@@ -96,6 +98,7 @@ impl ProtocolMessageType {
             &ProtocolMessageType::SystemInfo { .. } => true,
             &ProtocolMessageType::GetVariable { .. } => true,
             &ProtocolMessageType::AVInfo { .. } => true,
+            &ProtocolMessageType::Run => true,
             _ => false
         }
     }
@@ -109,6 +112,7 @@ impl ProtocolMessageType {
             &ProtocolMessageType::APIVersionResponse( .. ) => true,
             &ProtocolMessageType::GetVariableResponse( .. ) => true,
             &ProtocolMessageType::AVInfoResponse( .. ) => true,
+            &ProtocolMessageType::RunResponse => true,
             _ => false
         }
     }
