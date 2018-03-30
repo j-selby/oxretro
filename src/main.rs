@@ -28,28 +28,36 @@ fn main() {
     let matches = App::new("OxRetro")
         .version(crate_version!())
         .author("Selby <jselby@jselby.net>")
-        .about("A multi-process LibRetro implementation")
+        .about("A multi-process LibRetro implementation. Licensed under the Apache 2.0 license.")
         .arg(
             Arg::with_name("type")
+                .short("t")
                 .long("type")
                 .default_value("frontend")
+                .possible_values(&["frontend", "backend"])
                 .help("The kind of process that should be started")
+                .requires_if("backend", "core")
+                .requires_if("backend", "address")
+                .requires_if("frontend", "rom")
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("core")
+                .short("c")
                 .long("core")
-                .help("The core to load")
+                .help("The core to load. Required for frontend+backend or backend.")
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("address")
+                .short("a")
                 .long("address")
                 .help("address:port of the frontend to connect to, or to bind to")
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("rom")
+                .short("r")
                 .long("rom")
                 .help("[Frontend only] The rom to load")
                 .takes_value(true),
@@ -57,7 +65,9 @@ fn main() {
         .arg(
             Arg::with_name("no-backend")
                 .long("no-backend")
-                .help("[Frontend only] Starts a frontend without an associated backend"),
+                .help("[Frontend only] Starts a frontend without an associated backend")
+                .conflicts_with("core")
+                .requires("address"),
         )
         .get_matches();
 
