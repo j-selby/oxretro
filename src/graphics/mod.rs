@@ -28,13 +28,13 @@ pub trait Renderer {
     fn set_title(&mut self, title : String);
 }
 
-static AVAILABLE_RENDERERS: &'static [(&'static RendererInfo, fn() -> Box<Renderer>)] = &[
+static AVAILABLE_RENDERERS: &'static [(&'static RendererInfo, fn(u32, u32) -> Box<Renderer>)] = &[
         #[cfg(feature = "graphics_opengl")]
         (&gl::INFO, gl::build)
 ];
 
 /// Builds a new renderer with the specified properties.
-pub fn build(needs_opengl : bool, needs_vulkan : bool) -> Option<Box<Renderer>> {
+pub fn build(width : u32, height : u32, needs_opengl : bool, needs_vulkan : bool) -> Option<Box<Renderer>> {
     for &(ref info, ref function) in AVAILABLE_RENDERERS {
         if needs_opengl && !info.provides_opengl {
             continue;
@@ -46,7 +46,7 @@ pub fn build(needs_opengl : bool, needs_vulkan : bool) -> Option<Box<Renderer>> 
 
         println!("Attempting to load video core: {:?}", info);
 
-        return Some(function());
+        return Some(function(width, height));
     }
 
     return None;

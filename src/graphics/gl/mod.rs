@@ -77,13 +77,6 @@ impl Renderer for GLRenderer {
         }
 
         self.gl_window.swap_buffers().unwrap();
-
-        if !self.events_polled {
-            // Force event polling
-            self.poll_events();
-        }
-
-        self.events_polled = false;
     }
 
     fn poll_events(&mut self) {
@@ -126,9 +119,6 @@ impl Renderer for GLRenderer {
                 _ => ()
             }
         }
-
-        let formatted_title = format!("{} - FPS: {}", &self.title, self.fps.tick());
-        self.gl_window.set_title(&formatted_title);
     }
 
     fn is_alive(&self) -> bool {
@@ -162,15 +152,16 @@ impl Renderer for GLRenderer {
     }
 
     fn set_title(&mut self, title: String) {
+        self.gl_window.set_title(&title);
         self.title = title;
     }
 }
 
-pub fn build() -> Box<Renderer> {
+pub fn build(width : u32, height : u32) -> Box<Renderer> {
     let events_loop = glutin::EventsLoop::new();
     let window = glutin::WindowBuilder::new()
         .with_title("OxRetro")
-        .with_dimensions(400, 600);
+        .with_dimensions(width, height);
     let context = glutin::ContextBuilder::new()
         .with_vsync(true);
     let gl_window = glutin::GlWindow::new(window,

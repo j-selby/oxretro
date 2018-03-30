@@ -67,7 +67,10 @@ pub fn run(core : String, address : String) {
             ProtocolMessageType::Load(name) => assert!(lock.load_game(Some(Path::new(&name))).unwrap()),
             ProtocolMessageType::Unload => lock.unload_game().unwrap(),
             ProtocolMessageType::APIVersion => callback(ProtocolMessageType::APIVersionResponse(lock.get_api_version().unwrap())),
-            ProtocolMessageType::Run => lock.run().unwrap(),
+            ProtocolMessageType::Run => {
+                lock.run().unwrap();
+                callback(ProtocolMessageType::RunResponse)
+            },
             ProtocolMessageType::Reset => lock.reset().unwrap(),
             ProtocolMessageType::SystemInfo => callback(ProtocolMessageType::SystemInfoResponse(lock.get_system_info().unwrap())),
             ProtocolMessageType::AVInfo => callback(ProtocolMessageType::AVInfoResponse(lock.get_av_info().unwrap())),

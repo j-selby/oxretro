@@ -17,10 +17,10 @@ use graphics;
 use audio;
 use core_protocol::VideoRefreshType;
 use input::InputKey;
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
-use std::sync::mpsc::Sender;
 use std::time::Duration;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 /// Starts listening for messages over a socket. Binds to the port as a server.
 pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_spawn_core : bool) {
@@ -77,8 +77,30 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
     protocol.send(ProtocolMessageType::Init);
     protocol.send(ProtocolMessageType::Load(rom));
 
+    // Scale the window to a sane size
+    let mut display_width = av_info.geometry.base_width;
+    let mut display_height = av_info.geometry.base_height;
+    let mut scale = 1;
+    // TODO: Don't hardcode this
+    while scale < 4 {
+        scale += 1;
+        let new_display_width = av_info.geometry.base_width * scale;
+        let new_display_height = av_info.geometry.base_height * scale;
+
+        // TODO: Don't hardcode this
+        if new_display_width > 1280 || new_display_height > 1024 {
+            break;
+        }
+
+        display_width = new_display_width;
+        display_height = new_display_height;
+    }
+
+    println!("Selected resolution {}x{} at {}x.", display_width, display_height, scale);
+
     // Finish up our frontend
-    let mut renderer = graphics::build(false, false).unwrap();
+    let mut renderer = graphics::build(display_width, display_height,
+                                       false, false).unwrap();
 
     match &frontend.info {
         &Some(ref v) => renderer.set_title(format!("OxRetro - {} ({})", v.library_name,
@@ -92,22 +114,24 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
     let audio_size_callback = audio.get_done_callback();
     frontend.audio = Some(audio);
 
-    // Signaling for the start of a frame. true if frames should continue to be sent
-    let (frame_tx, frame_rx): (Sender<bool>,
-                               Receiver<bool>) = mpsc::channel();
+    // Signals to the frontend ticker that we should shutdown
+    let shutdown_signal = Arc::new(AtomicBool::new(false));
+
+    let thread_signal = shutdown_signal.clone();
 
     // Create a thread for managing events
-    thread::Builder::new().name("frontend-events".to_owned()).spawn(move || {
+    thread::Builder::new().name("frontend-ticker".to_owned()).spawn(move || {
         loop {
-            protocol.send(ProtocolMessageType::Run);
+            protocol.send(ProtocolMessageType::Run).unwrap().unwrap();
 
             // TODO: busy loop
             while !audio_size_callback() {
                 thread::sleep(Duration::from_millis(1));
             }
 
-            if !frame_rx.recv().unwrap() {
-                protocol.send(ProtocolMessageType::Unload);
+            if thread_signal.load(Ordering::Relaxed) {
+                protocol.send(ProtocolMessageType::Unload).unwrap();
+                protocol.send(ProtocolMessageType::Deinit).unwrap();
                 break;
             }
         }
@@ -118,7 +142,6 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
         let (event, callback) = match events.poll() {
             Some(v) => v,
             None => {
-                println!("Frontend was disconnected from client.");
                 break
             }
         };
@@ -177,8 +200,6 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
                 if !frontend.is_alive() {
                     break;
                 }
-
-                frame_tx.send(true).unwrap();
             },
             ProtocolMessageType::AudioSample(samples) => {
                 match &mut frontend.audio {
@@ -194,5 +215,5 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
         }
     }
 
-    frame_tx.send(false).unwrap();
+    shutdown_signal.store(true, Ordering::Relaxed);
 }
