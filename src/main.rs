@@ -1,3 +1,4 @@
+//! A multi-process implementation of oxretro.
 #![feature(vec_remove_item)]
 #![feature(duration_from_micros)]
 
@@ -11,15 +12,15 @@ extern crate byteorder;
 #[macro_use]
 extern crate clap;
 
-mod audio;
-mod input;
-mod graphics;
-mod backend;
-mod frontend;
+pub mod audio;
+pub mod input;
+pub mod graphics;
+pub mod backend;
+pub mod frontend;
 
-mod retro_types;
-mod ffi;
-mod core_protocol;
+pub mod retro_types;
+pub mod ffi;
+pub mod core_protocol;
 
 use clap::{App, Arg};
 

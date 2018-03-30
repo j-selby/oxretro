@@ -1,4 +1,6 @@
-/// Handlers for the callbacks from the LibRetro core.
+//! Handlers for the C callbacks from the LibRetro core itself.
+//! These are generally unsafe, and have to use a global callback in order to talk to the main
+//! application.
 
 use retro_types::RetroPixelFormat;
 use retro_types::RetroEnvironment;
@@ -14,6 +16,8 @@ use std::slice::from_raw_parts;
 use core_protocol::ProtocolMessageType;
 use core_protocol::VideoRefreshType;
 
+/// Misc. environment calls.
+///
 pub unsafe extern "C" fn environment_callback(cmd: c_uint, data: *const c_void) -> bool {
     // Mask out flags - they are for API defintions mainly, and we either
     // support the specfic feature or not.

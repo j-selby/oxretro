@@ -1,4 +1,4 @@
-/// Handles Frontend<->Backend communication
+//! The main event handler of the frontend.
 
 use core_protocol::ProtocolAdapter;
 use core_protocol::ProtocolMessageType;

@@ -1,4 +1,4 @@
-/// Maintains the current, global state.
+//! Maintains the current, global state.
 
 use graphics::Renderer;
 use audio::AudioBackend;
