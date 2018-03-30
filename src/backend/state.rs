@@ -11,13 +11,13 @@ use retro_types::RetroPixelFormat;
 
 // Static callbacks
 pub struct BackendState {
-    pub format : RetroPixelFormat,
+    pub format: RetroPixelFormat,
 
     // Extract these to a FII structure
-    pub save_path : CString,
-    pub system_path : CString,
+    pub save_path: CString,
+    pub system_path: CString,
 
-    is_global : bool
+    is_global: bool,
 }
 
 impl BackendState {
@@ -41,30 +41,38 @@ impl BackendState {
     }
 
     /// Builds a new frontend state.
-    pub fn new(format : RetroPixelFormat) -> BackendState {
+    pub fn new(format: RetroPixelFormat) -> BackendState {
         let saves_dir = Path::new("saves");
         if !saves_dir.exists() {
             create_dir(&saves_dir).unwrap();
         }
 
-        let saves_dir = canonicalize(saves_dir).unwrap().to_str().unwrap().to_owned();
+        let saves_dir = canonicalize(saves_dir)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
 
         let systems_dir = Path::new("system");
         if !systems_dir.exists() {
             create_dir(&systems_dir).unwrap();
         }
 
-        let systems_dir = canonicalize(systems_dir).unwrap().to_str().unwrap().to_owned();
+        let systems_dir = canonicalize(systems_dir)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
 
         println!("Save path: {}", saves_dir);
 
         BackendState {
             format,
 
-            save_path : CString::new(saves_dir).unwrap(),
-            system_path : CString::new(systems_dir).unwrap(),
+            save_path: CString::new(saves_dir).unwrap(),
+            system_path: CString::new(systems_dir).unwrap(),
 
-            is_global: false
+            is_global: false,
         }
     }
 }
@@ -78,11 +86,9 @@ impl Drop for BackendState {
 }
 
 /// Reference to the current frontend. Necessary for
-static mut BACKEND : Option<*mut BackendState> = None;
+static mut BACKEND: Option<*mut BackendState> = None;
 
 /// Returns the current frontend, or panics if one is not available.
 pub fn get_current_backend() -> &'static mut BackendState {
-    unsafe {
-        transmute(BACKEND.unwrap())
-    }
+    unsafe { transmute(BACKEND.unwrap()) }
 }

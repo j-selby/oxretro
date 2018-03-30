@@ -9,13 +9,13 @@ use input::InputKey;
 
 #[derive(Debug)]
 pub struct RendererInfo {
-    name : &'static str,
-    provides_opengl : bool,
-    provides_vulkan : bool
+    name: &'static str,
+    provides_opengl: bool,
+    provides_vulkan: bool,
 }
 
 pub trait Renderer {
-    fn submit_frame(&mut self, frame : &[u8], width : usize, height : usize);
+    fn submit_frame(&mut self, frame: &[u8], width: usize, height: usize);
 
     // TODO: This shouldn't be here
     fn poll_events(&mut self);
@@ -23,18 +23,23 @@ pub trait Renderer {
     fn is_alive(&self) -> bool;
 
     // TODO: This shouldn't be here
-    fn is_key_down(&self, key : &InputKey) -> bool;
+    fn is_key_down(&self, key: &InputKey) -> bool;
 
-    fn set_title(&mut self, title : String);
+    fn set_title(&mut self, title: String);
 }
 
 static AVAILABLE_RENDERERS: &'static [(&'static RendererInfo, fn(u32, u32) -> Box<Renderer>)] = &[
-        #[cfg(feature = "graphics_opengl")]
-        (&gl::INFO, gl::build)
+    #[cfg(feature = "graphics_opengl")]
+    (&gl::INFO, gl::build),
 ];
 
 /// Builds a new renderer with the specified properties.
-pub fn build(width : u32, height : u32, needs_opengl : bool, needs_vulkan : bool) -> Option<Box<Renderer>> {
+pub fn build(
+    width: u32,
+    height: u32,
+    needs_opengl: bool,
+    needs_vulkan: bool,
+) -> Option<Box<Renderer>> {
     for &(ref info, ref function) in AVAILABLE_RENDERERS {
         if needs_opengl && !info.provides_opengl {
             continue;

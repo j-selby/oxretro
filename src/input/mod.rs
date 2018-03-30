@@ -20,23 +20,23 @@ pub enum InputKey {
     L2,
     R2,
     L3,
-    R3
+    R3,
 }
 
 #[derive(Debug)]
 pub struct InputBackendInfo {
-    name : &'static str
+    name: &'static str,
 }
 
 pub trait InputBackend {
     fn poll_events(&mut self);
 
-    fn is_key_down(&self, key : &InputKey) -> bool;
+    fn is_key_down(&self, key: &InputKey) -> bool;
 }
 
 static AVAILABLE_BACKENDS: &'static [(&'static InputBackendInfo, fn() -> Box<InputBackend>)] = &[
-        #[cfg(feature = "input_gilrs")]
-        (&gilrs::INFO, gilrs::build)
+    #[cfg(feature = "input_gilrs")]
+    (&gilrs::INFO, gilrs::build),
 ];
 
 /// Builds a new renderer with the specified properties.

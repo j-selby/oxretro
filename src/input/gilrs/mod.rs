@@ -2,14 +2,12 @@
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();*/
 extern crate gilrs;
 
-use self::gilrs::{Gilrs, Button, Event};
+use self::gilrs::{Button, Event, Gilrs};
 
 use input::InputBackendInfo;
 use input::InputBackend;
 
-struct GLFWBackend {
-
-}
+struct GLFWBackend {}
 
 impl InputBackend for GLFWBackend {
     fn poll_events(&mut self) {
@@ -21,9 +19,7 @@ impl InputBackend for GLFWBackend {
     }
 }
 
-pub static INFO : InputBackendInfo = InputBackendInfo {
-    name: "GLFW"
-};
+pub static INFO: InputBackendInfo = InputBackendInfo { name: "GLFW" };
 
 pub fn build() -> Option<Box<GLFWBackend>> {
     let mut gilrs = Gilrs::new().unwrap();

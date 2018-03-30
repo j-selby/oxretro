@@ -23,11 +23,11 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 /// Starts listening for messages over a socket. Binds to the port as a server.
-pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_spawn_core : bool) {
+pub fn run(core: Option<String>, rom: String, address: Option<String>, dont_spawn_core: bool) {
     // Bind to our target port
     let server = match address {
         Some(v) => TcpListener::bind(v).unwrap(),
-        None => TcpListener::bind("127.0.0.1:0").unwrap()
+        None => TcpListener::bind("127.0.0.1:0").unwrap(),
     };
 
     let port = server.local_addr().unwrap().port();
@@ -36,9 +36,12 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
     if !dont_spawn_core {
         let exe_path = current_exe().unwrap();
         let _process = Command::new(exe_path)
-            .arg("--type").arg("backend")
-            .arg("--address").arg(&format!("127.0.0.1:{}", port))
-            .arg("--core").arg(&core.unwrap())
+            .arg("--type")
+            .arg("backend")
+            .arg("--address")
+            .arg(&format!("127.0.0.1:{}", port))
+            .arg("--core")
+            .arg(&core.unwrap())
             .stdin(Stdio::null())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
@@ -56,22 +59,23 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
     let stdin = Box::new(stream.try_clone().unwrap());
     let stdout = Box::new(stream.try_clone().unwrap());
     // TODO: Handle events
-    let (protocol, events) = ProtocolAdapter::new("frontend".to_owned(),
-                                                  stdin, stdout);
+    let (protocol, events) = ProtocolAdapter::new("frontend".to_owned(), stdin, stdout);
 
     // Request system info
-    let data =
-        match protocol.send(ProtocolMessageType::SystemInfo).unwrap().unwrap() {
-            ProtocolMessageType::SystemInfoResponse(info) => info,
-            _ => panic!("Bad response to system info!")
-        };
+    let data = match protocol
+        .send(ProtocolMessageType::SystemInfo)
+        .unwrap()
+        .unwrap()
+    {
+        ProtocolMessageType::SystemInfoResponse(info) => info,
+        _ => panic!("Bad response to system info!"),
+    };
     println!("Loaded core: {:?}", data.library_name);
     frontend.info = Some(data);
 
-    let av_info = match protocol.send(ProtocolMessageType::AVInfo)
-        .unwrap().unwrap() {
+    let av_info = match protocol.send(ProtocolMessageType::AVInfo).unwrap().unwrap() {
         ProtocolMessageType::AVInfoResponse(info) => info,
-        _ => panic!("Unknown A/V info")
+        _ => panic!("Unknown A/V info"),
     };
 
     protocol.send(ProtocolMessageType::Init);
@@ -96,16 +100,20 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
         display_height = new_display_height;
     }
 
-    println!("Selected resolution {}x{} at {}x.", display_width, display_height, scale);
+    println!(
+        "Selected resolution {}x{} at {}x.",
+        display_width, display_height, scale
+    );
 
     // Finish up our frontend
-    let mut renderer = graphics::build(display_width, display_height,
-                                       false, false).unwrap();
+    let mut renderer = graphics::build(display_width, display_height, false, false).unwrap();
 
     match &frontend.info {
-        &Some(ref v) => renderer.set_title(format!("OxRetro - {} ({})", v.library_name,
-                                       v.library_version)),
-        _ => panic!("Missing frontend info?")
+        &Some(ref v) => renderer.set_title(format!(
+            "OxRetro - {} ({})",
+            v.library_name, v.library_version
+        )),
+        _ => panic!("Missing frontend info?"),
     }
 
     frontend.renderer = Some(renderer);
@@ -120,38 +128,41 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
     let thread_signal = shutdown_signal.clone();
 
     // Create a thread for managing events
-    thread::Builder::new().name("frontend-ticker".to_owned()).spawn(move || {
-        loop {
-            match protocol.send(ProtocolMessageType::Run).unwrap().try_poll() {
-                // Main thread has been destroyed
-                None => break,
-                _ => {}
-            };
+    thread::Builder::new()
+        .name("frontend-ticker".to_owned())
+        .spawn(move || {
+            loop {
+                match protocol.send(ProtocolMessageType::Run).unwrap().try_poll() {
+                    // Main thread has been destroyed
+                    None => break,
+                    _ => {}
+                };
 
-            // TODO: busy loop
-            while !audio_size_callback() {
-                thread::sleep(Duration::from_millis(1));
-            }
+                // TODO: busy loop
+                while !audio_size_callback() {
+                    thread::sleep(Duration::from_millis(1));
+                }
 
-            if thread_signal.load(Ordering::Relaxed) {
-                protocol.send(ProtocolMessageType::Unload).unwrap();
-                protocol.send(ProtocolMessageType::Deinit).unwrap();
-                break;
+                if thread_signal.load(Ordering::Relaxed) {
+                    protocol.send(ProtocolMessageType::Unload).unwrap();
+                    protocol.send(ProtocolMessageType::Deinit).unwrap();
+                    break;
+                }
             }
-        }
-    }).unwrap();
+        })
+        .unwrap();
 
     // Start up our main loop - we no longer need to talk to the frontend
     loop {
         let (event, callback) = match events.poll() {
             Some(v) => v,
-            None => {
-                break
-            }
+            None => break,
         };
 
         match event {
-            ProtocolMessageType::GetVariable(name) => callback(ProtocolMessageType::GetVariableResponse(None)),
+            ProtocolMessageType::GetVariable(name) => {
+                callback(ProtocolMessageType::GetVariableResponse(None))
+            }
             ProtocolMessageType::PollInput => frontend.poll_input(),
             ProtocolMessageType::InputState { id, .. } => {
                 let key = match id {
@@ -171,10 +182,10 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
                     13 => InputKey::R2,
                     14 => InputKey::L3,
                     15 => InputKey::R3,
-                    _ => panic!("Unknown input ID: {}", id)
+                    _ => panic!("Unknown input ID: {}", id),
                 };
 
-                let result : i16;
+                let result: i16;
                 match &mut frontend.renderer {
                     &mut Some(ref mut v) => {
                         if v.is_key_down(&key) {
@@ -182,36 +193,38 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
                         } else {
                             result = 0;
                         }
-                    },
-                    &mut None => panic!("No renderer available!")
+                    }
+                    &mut None => panic!("No renderer available!"),
                 }
 
                 callback(ProtocolMessageType::InputResponse(result));
-            },
+            }
             ProtocolMessageType::VideoRefresh(refresh) => {
                 match &mut frontend.renderer {
-                    &mut Some(ref mut v) => {
-                        match refresh {
-                            VideoRefreshType::Software { framebuffer, width, height } => {
-                                v.submit_frame(&framebuffer, width as usize, height as usize);
-                            },
-                            VideoRefreshType::Hardware => panic!("Hardware accelerated cores not supported!")
+                    &mut Some(ref mut v) => match refresh {
+                        VideoRefreshType::Software {
+                            framebuffer,
+                            width,
+                            height,
+                        } => {
+                            v.submit_frame(&framebuffer, width as usize, height as usize);
+                        }
+                        VideoRefreshType::Hardware => {
+                            panic!("Hardware accelerated cores not supported!")
                         }
                     },
-                    &mut None => panic!("No renderer available!")
+                    &mut None => panic!("No renderer available!"),
                 }
 
                 if !frontend.is_alive() {
                     break;
                 }
-            },
-            ProtocolMessageType::AudioSample(samples) => {
-                match &mut frontend.audio {
-                    &mut Some(ref mut v) => {
-                        v.submit_frame(&samples);
-                    },
-                    &mut None => panic!("No audio core available!")
+            }
+            ProtocolMessageType::AudioSample(samples) => match &mut frontend.audio {
+                &mut Some(ref mut v) => {
+                    v.submit_frame(&samples);
                 }
+                &mut None => panic!("No audio core available!"),
             },
             _ => {
                 //println!("Ignoring!")

@@ -15,10 +15,10 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::path::Path;
 
-static mut ADAPTER : Option<Arc<Mutex<ProtocolAdapter>>> = None;
+static mut ADAPTER: Option<Arc<Mutex<ProtocolAdapter>>> = None;
 
 /// Starts listening for messages over a socket.
-pub fn run(core : String, address : String) {
+pub fn run(core: String, address: String) {
     println!("Loading library...");
     let library = lib::Library::new(&core).unwrap();
 
@@ -38,8 +38,7 @@ pub fn run(core : String, address : String) {
     let input = Box::new(stream.try_clone().unwrap());
     let output = Box::new(stream.try_clone().unwrap());
     // TODO: Consume events on the main thread
-    let (comms, events) =
-        ProtocolAdapter::new("backend".to_owned(),input, output);
+    let (comms, events) = ProtocolAdapter::new("backend".to_owned(), input, output);
 
     // Store comms for later
     let boxed_comms = Arc::new(Mutex::new(comms));
@@ -55,7 +54,7 @@ pub fn run(core : String, address : String) {
     loop {
         let (event, callback) = match events.poll() {
             Some(v) => v,
-            None => break
+            None => break,
         };
 
         let lock = core.lock().unwrap();
@@ -64,27 +63,33 @@ pub fn run(core : String, address : String) {
         match event {
             ProtocolMessageType::Init => lock.init().unwrap(),
             ProtocolMessageType::Deinit => lock.deinit().unwrap(),
-            ProtocolMessageType::Load(name) => assert!(lock.load_game(Some(Path::new(&name))).unwrap()),
+            ProtocolMessageType::Load(name) => {
+                assert!(lock.load_game(Some(Path::new(&name))).unwrap())
+            }
             ProtocolMessageType::Unload => lock.unload_game().unwrap(),
-            ProtocolMessageType::APIVersion => callback(ProtocolMessageType::APIVersionResponse(lock.get_api_version().unwrap())),
+            ProtocolMessageType::APIVersion => callback(ProtocolMessageType::APIVersionResponse(
+                lock.get_api_version().unwrap(),
+            )),
             ProtocolMessageType::Run => {
                 lock.run().unwrap();
                 callback(ProtocolMessageType::RunResponse)
-            },
+            }
             ProtocolMessageType::Reset => lock.reset().unwrap(),
-            ProtocolMessageType::SystemInfo => callback(ProtocolMessageType::SystemInfoResponse(lock.get_system_info().unwrap())),
-            ProtocolMessageType::AVInfo => callback(ProtocolMessageType::AVInfoResponse(lock.get_av_info().unwrap())),
-            _ => panic!("Unhandled command!")
+            ProtocolMessageType::SystemInfo => callback(ProtocolMessageType::SystemInfoResponse(
+                lock.get_system_info().unwrap(),
+            )),
+            ProtocolMessageType::AVInfo => callback(ProtocolMessageType::AVInfoResponse(
+                lock.get_av_info().unwrap(),
+            )),
+            _ => panic!("Unhandled command!"),
         }
     }
 }
 
 /// Sends a message to the frontend, with a optional response.
-pub fn send_message(message : ProtocolMessageType) -> Option<ProtocolFuture> {
+pub fn send_message(message: ProtocolMessageType) -> Option<ProtocolFuture> {
     match unsafe { &ADAPTER } {
-        &Some(ref v) => {
-            v.lock().unwrap().send(message)
-        },
-        _ => panic!("No adapter to send message to!")
+        &Some(ref v) => v.lock().unwrap().send(message),
+        _ => panic!("No adapter to send message to!"),
     }
 }

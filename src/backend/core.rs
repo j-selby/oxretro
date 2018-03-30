@@ -13,27 +13,27 @@ use backend::callbacks::*;
 
 // Core interface
 pub struct LibRetroCore {
-    library : lib::Library
+    library: lib::Library,
 }
 
 // Error handling
 #[derive(Debug)]
 pub enum CoreError {
     BadLibrary(io::Error),
-    BadEncoding(Utf8Error)
+    BadEncoding(Utf8Error),
 }
 
-fn translate_lib_result<T>(result : Result<T, io::Error>) -> Result<T, CoreError> {
+fn translate_lib_result<T>(result: Result<T, io::Error>) -> Result<T, CoreError> {
     match result {
         Ok(v) => Ok(v),
-        Err(v) => Err(CoreError::BadLibrary(v))
+        Err(v) => Err(CoreError::BadLibrary(v)),
     }
 }
 
-fn translate_encoding_result<T>(result : Result<T, Utf8Error>) -> Result<T, CoreError> {
+fn translate_encoding_result<T>(result: Result<T, Utf8Error>) -> Result<T, CoreError> {
     match result {
         Ok(v) => Ok(v),
-        Err(v) => Err(CoreError::BadEncoding(v))
+        Err(v) => Err(CoreError::BadEncoding(v)),
     }
 }
 
@@ -76,29 +76,29 @@ impl LibRetroCore {
         Ok(())
     }
 
-    pub fn load_game(&self, path : Option<&Path>) -> Result<bool, CoreError> {
+    pub fn load_game(&self, path: Option<&Path>) -> Result<bool, CoreError> {
         let info = self.get_system_info()?;
 
         let meta = match path {
-            Some(v) => {
-                Some(
-                    if info.need_fullpath {
-                        RetroGameInfo::new(v.to_str(), None,
-                                           translate_lib_result(v.metadata())?.len() as _, Some(""))
-                    } else {
-                        let length : usize;
-                        let data = {
-                            let mut file = translate_lib_result(File::open(v))?;
-                            let mut buf = Vec::new();
-                            length = translate_lib_result(file.read_to_end(&mut buf))?;
-                            buf
-                        };
-
-                        RetroGameInfo::new(v.to_str(), Some(data),length, Some(""))
-                    }
+            Some(v) => Some(if info.need_fullpath {
+                RetroGameInfo::new(
+                    v.to_str(),
+                    None,
+                    translate_lib_result(v.metadata())?.len() as _,
+                    Some(""),
                 )
-            }
-            _ => None
+            } else {
+                let length: usize;
+                let data = {
+                    let mut file = translate_lib_result(File::open(v))?;
+                    let mut buf = Vec::new();
+                    length = translate_lib_result(file.read_to_end(&mut buf))?;
+                    buf
+                };
+
+                RetroGameInfo::new(v.to_str(), Some(data), length, Some(""))
+            }),
+            _ => None,
         };
 
         unsafe {
@@ -107,9 +107,8 @@ impl LibRetroCore {
 
             match meta {
                 Some(v) => Ok(func((&v.as_raw()) as *const RawRetroGameInfo)),
-                None => Ok(func(0 as *const RawRetroGameInfo))
+                None => Ok(func(0 as *const RawRetroGameInfo)),
             }
-
         }
     }
 
@@ -192,9 +191,7 @@ impl LibRetroCore {
         }
     }
 
-    pub fn from_library(library : lib::Library) -> LibRetroCore {
-        LibRetroCore {
-            library
-        }
+    pub fn from_library(library: lib::Library) -> LibRetroCore {
+        LibRetroCore { library }
     }
 }
