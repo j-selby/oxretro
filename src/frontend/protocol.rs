@@ -122,7 +122,11 @@ pub fn run(core : Option<String>, rom : String, address : Option<String>, dont_s
     // Create a thread for managing events
     thread::Builder::new().name("frontend-ticker".to_owned()).spawn(move || {
         loop {
-            protocol.send(ProtocolMessageType::Run).unwrap().unwrap();
+            match protocol.send(ProtocolMessageType::Run).unwrap().try_poll() {
+                // Main thread has been destroyed
+                None => break,
+                _ => {}
+            };
 
             // TODO: busy loop
             while !audio_size_callback() {

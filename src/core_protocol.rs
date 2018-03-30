@@ -148,6 +148,19 @@ impl ProtocolFuture {
         self.receiver.recv().unwrap()
     }
 
+    /// Polls for a response. Returns `None` if unable to be completed.
+    pub fn try_poll(&mut self) -> Option<ProtocolMessageType> {
+        if self.already_recv {
+            panic!("Already fetched a future!");
+        }
+
+        self.already_recv = true;
+        match self.receiver.recv() {
+            Ok(v) => Some(v),
+            _ => None
+        }
+    }
+
     /// Unwraps this future with the given response. Panics if value unable to be received.
     pub fn unwrap(mut self) -> ProtocolMessageType {
         self.poll()
